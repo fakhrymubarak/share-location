@@ -23,17 +23,18 @@ Relational source of truth for users, conversations, memberships, durable chat m
   - Notes: `username` uniqueness enforced; username is used for upsert on login/handshake.
 
 - `conversations`
-  - Columns: `id uuid pk`, `type text not null check in ('direct','group')`, `title text null`, `created_at timestamptz not null default now()`.
-  - Notes: Optionally enforce uniqueness for `direct` pairs via separate constraint/table later.
+  - Columns: `id uuid pk`, `type text not null check in ('direct','group')`, `title text null`, `direct_pair_key text null`, `created_at timestamptz not null default now()`.
+  - Notes: Direct conversations are unique per user pair. `direct_pair_key` stores a deterministic sorted pair of user ids (e.g., `least:greatest`) for direct convos and is `NULL` for groups. Enforce uniqueness via a partial unique index on `(type, direct_pair_key)` where `direct_pair_key IS NOT NULL`; creation returns the existing convo if it already exists.
 
 - `conversation_members`
   - Columns: `conversation_id uuid fk -> conversations.id`, `user_id uuid fk -> users.id`, `role text not null default 'member'`, `joined_at timestamptz not null default now()`, `last_read_message_id uuid null fk -> messages.id`.
   - PK: `(conversation_id, user_id)`.
-  - Notes: Used for membership validation and receipt rollups.
+  - Indexes: `(conversation_id, user_id)` via PK; additional index on `(user_id)` for “my conversations” lookups.
+  - Notes: `last_read_message_id` must belong to the same conversation (composite FK on `(conversation_id, last_read_message_id)` referencing `messages(conversation_id, id)` to prevent cross-conversation pointers). Used for membership validation and receipt rollups.
 
 - `messages`
   - Columns: `id uuid pk`, `conversation_id uuid fk`, `sender_id uuid fk -> users.id`, `body jsonb not null`, `message_type text not null check in ('text','location','media')`, `client_msg_id text not null`, `created_at timestamptz not null default now()`.
-  - Index: unique on `(conversation_id, sender_id, client_msg_id)` for idempotency within a conversation; query index on `(conversation_id, created_at, id)`.
+  - Index: unique on `(conversation_id, sender_id, client_msg_id)` for idempotency within a conversation; query index on `(conversation_id, created_at, id)`; optional index on `(sender_id, created_at)` if “sent by me” queries are needed.
   - Notes: `body` stays small (validated size); `client_msg_id` from client for dedupe scoped to conversation.
 
 - `delivery_receipts`
@@ -44,6 +45,7 @@ Relational source of truth for users, conversations, memberships, durable chat m
 - `live_location_sessions`
   - Columns: `id uuid pk`, `user_id uuid fk -> users.id`, `conversation_id uuid null fk -> conversations.id`, `expires_at timestamptz not null`.
   - Index: on `(conversation_id, expires_at)` for cleanup; `(user_id)` for publisher lookup.
+  - Constraints: unique `(user_id, conversation_id)` where `conversation_id IS NOT NULL` to allow only one active session per user per conversation; unique `(user_id)` where `conversation_id IS NULL` to prevent unlimited global sessions. Adjust partial uniques if global sessions are not allowed.
   - Notes: Stores session metadata only; actual points are in Redis.
 
 ## Constraints and integrity
