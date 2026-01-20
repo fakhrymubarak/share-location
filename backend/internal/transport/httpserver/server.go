@@ -20,6 +20,7 @@ type Deps struct {
 	Users         *service.UserService
 	Conversations *service.ConversationService
 	Messaging     *service.MessagingService
+	LiveLocation  *service.LiveLocationService
 }
 
 func New(deps Deps) *fiber.App {
@@ -31,6 +32,7 @@ func New(deps Deps) *fiber.App {
 	app.Post("/v1/conversations", createConversationHandler(deps.Conversations))
 	app.Get("/v1/conversations/:id/messages", listMessagesHandler(deps.Messaging))
 	app.Post("/v1/messages/:id/receipt", receiptHandler(deps.Messaging))
+	app.Post("/v1/live-locations", startLiveLocationHandler(deps.LiveLocation))
 
 	app.Use("/ws", websocket.New(wsHandler(deps.Users, deps.Messaging)))
 
@@ -167,6 +169,51 @@ func receiptHandler(msgs *service.MessagingService) fiber.Handler {
 			return err
 		}
 		return c.SendStatus(http.StatusNoContent)
+	}
+}
+
+func startLiveLocationHandler(live *service.LiveLocationService) fiber.Handler {
+	type request struct {
+		UserID         string `json:"user_id"`
+		ConversationID string `json:"conversation_id,omitempty"`
+		TTLSeconds     int    `json:"ttl_seconds,omitempty"`
+	}
+	type response struct {
+		StreamID   string `json:"stream_id"`
+		ExpiresAt  string `json:"expires_at"`
+		UserID     string `json:"user_id"`
+		ConversationID string `json:"conversation_id,omitempty"`
+	}
+	return func(c *fiber.Ctx) error {
+		var req request
+		if err := c.BodyParser(&req); err != nil {
+			return fiber.ErrBadRequest
+		}
+		userID, err := uuid.Parse(req.UserID)
+		if err != nil {
+			return fiber.ErrBadRequest
+		}
+		var convID uuid.UUID
+		if req.ConversationID != "" {
+			convID, err = uuid.Parse(req.ConversationID)
+			if err != nil {
+				return fiber.ErrBadRequest
+			}
+		}
+		session, err := live.StartSession(c.Context(), service.StartSessionRequest{
+			UserID:         userID,
+			ConversationID: convID,
+			RequestedTTL:   time.Duration(req.TTLSeconds) * time.Second,
+		})
+		if err != nil {
+			return err
+		}
+		return c.Status(http.StatusOK).JSON(response{
+			StreamID:   session.ID.String(),
+			ExpiresAt:  session.ExpiresAt.Format(time.RFC3339),
+			UserID:     session.UserID.String(),
+			ConversationID: session.ConversationID.String(),
+		})
 	}
 }
 

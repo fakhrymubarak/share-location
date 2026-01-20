@@ -26,11 +26,13 @@ func TestLoginAndConversationEndpoints(t *testing.T) {
 	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
 	msgSvc := service.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now })
 	convSvc := service.NewConversationService(usersRepo, convRepo, memberRepo, func() time.Time { return now })
+	liveSvc := service.NewLiveLocationService(memory.NewLiveLocationRepository(func() time.Time { return now }), memberRepo, memory.NewLiveLocationPublisher(), 15*time.Minute, func() time.Time { return now })
 
 	app := New(Deps{
 		Users:         service.NewUserService(usersRepo),
 		Conversations: convSvc,
 		Messaging:     msgSvc,
+		LiveLocation:  liveSvc,
 	})
 
 	loginBody, _ := json.Marshal(map[string]string{"username": "alice"})
@@ -114,6 +116,21 @@ func TestLoginAndConversationEndpoints(t *testing.T) {
 	if resp.StatusCode != 204 {
 		t.Fatalf("receipt status = %d", resp.StatusCode)
 	}
+
+	llBody, _ := json.Marshal(map[string]any{
+		"user_id":         alice.ID.String(),
+		"conversation_id": convID,
+		"ttl_seconds":     600,
+	})
+	req = httptest.NewRequest("POST", "/v1/live-locations", bytes.NewReader(llBody))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = app.Test(req)
+	if err != nil {
+		t.Fatalf("live location request failed: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("live location status = %d", resp.StatusCode)
+	}
 }
 
 func TestHandlers_ReturnValidationErrors(t *testing.T) {
@@ -123,11 +140,13 @@ func TestHandlers_ReturnValidationErrors(t *testing.T) {
 	memberRepo := memory.NewMembershipRepository(func() time.Time { return now })
 	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
 	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
+	liveSvc := service.NewLiveLocationService(memory.NewLiveLocationRepository(func() time.Time { return now }), memberRepo, memory.NewLiveLocationPublisher(), 15*time.Minute, func() time.Time { return now })
 
 	app := New(Deps{
 		Users:         service.NewUserService(usersRepo),
 		Conversations: service.NewConversationService(usersRepo, convRepo, memberRepo, func() time.Time { return now }),
 		Messaging:     service.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now }),
+		LiveLocation:  liveSvc,
 	})
 
 	// Blank username should trigger validation.
@@ -159,11 +178,13 @@ func TestWebSocketHandshake(t *testing.T) {
 	memberRepo := memory.NewMembershipRepository(func() time.Time { return now })
 	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
 	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
+	liveSvc := service.NewLiveLocationService(memory.NewLiveLocationRepository(func() time.Time { return now }), memberRepo, memory.NewLiveLocationPublisher(), 15*time.Minute, func() time.Time { return now })
 
 	app := New(Deps{
 		Users:         service.NewUserService(usersRepo),
 		Conversations: service.NewConversationService(usersRepo, convRepo, memberRepo, func() time.Time { return now }),
 		Messaging:     service.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now }),
+		LiveLocation:  liveSvc,
 	})
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -206,11 +227,13 @@ func TestWebSocketHandshakeInvalidUsername(t *testing.T) {
 	memberRepo := memory.NewMembershipRepository(func() time.Time { return now })
 	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
 	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
+	liveSvc := service.NewLiveLocationService(memory.NewLiveLocationRepository(func() time.Time { return now }), memberRepo, memory.NewLiveLocationPublisher(), 15*time.Minute, func() time.Time { return now })
 
 	app := New(Deps{
 		Users:         service.NewUserService(usersRepo),
 		Conversations: service.NewConversationService(usersRepo, convRepo, memberRepo, func() time.Time { return now }),
 		Messaging:     service.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now }),
+		LiveLocation:  liveSvc,
 	})
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -243,6 +266,7 @@ func TestWebSocketSendChat(t *testing.T) {
 	memberRepo := memory.NewMembershipRepository(func() time.Time { return now })
 	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
 	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
+	liveSvc := service.NewLiveLocationService(memory.NewLiveLocationRepository(func() time.Time { return now }), memberRepo, memory.NewLiveLocationPublisher(), 15*time.Minute, func() time.Time { return now })
 
 	convSvc := service.NewConversationService(usersRepo, convRepo, memberRepo, func() time.Time { return now })
 	msgSvc := service.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now })
@@ -250,6 +274,7 @@ func TestWebSocketSendChat(t *testing.T) {
 		Users:         service.NewUserService(usersRepo),
 		Conversations: convSvc,
 		Messaging:     msgSvc,
+		LiveLocation:  liveSvc,
 	})
 
 	// Seed conversation and membership.
