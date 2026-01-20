@@ -7,8 +7,10 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/fakhry/share-location/backend/internal/config"
+	dbpg "github.com/fakhry/share-location/backend/internal/db/pg"
 	"github.com/fakhry/share-location/backend/internal/repo/memory"
 	"github.com/fakhry/share-location/backend/internal/service"
 	"github.com/fakhry/share-location/backend/internal/transport/httpserver"
@@ -45,6 +47,9 @@ func defaultConfig() *config.Config {
 
 // buildApp wires dependencies using in-memory repositories. Returns the Fiber app and port.
 func buildApp(cfg *config.Config) (*fiber.App, int) {
+	_ = dbpg.DB{} // placeholder wiring hook for future Postgres impls
+	_ = redisClient(cfg.Redis.URL) // placeholder for future Redis impls
+
 	usersRepo := memory.NewUserRepository(nil)
 	convsRepo := memory.NewConversationRepository(nil)
 	membersRepo := memory.NewMembershipRepository(nil)
@@ -78,4 +83,15 @@ func seconds(n int) time.Duration {
 		return 0
 	}
 	return time.Duration(n) * time.Second
+}
+
+func redisClient(url string) *redis.Client {
+	if url == "" {
+		return nil
+	}
+	opts, err := redis.ParseURL(url)
+	if err != nil {
+		return nil
+	}
+	return redis.NewClient(opts)
 }

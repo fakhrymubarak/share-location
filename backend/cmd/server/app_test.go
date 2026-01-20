@@ -46,3 +46,17 @@ func TestMustLoadConfigFallback(t *testing.T) {
 		t.Fatalf("expected default port from fallback config")
 	}
 }
+
+func TestRedisClientParseError(t *testing.T) {
+	if client := redisClient("://bad"); client != nil {
+		t.Fatalf("expected nil client on bad URL")
+	}
+}
+
+func TestRedisClientParseSuccess(t *testing.T) {
+	client := redisClient("redis://localhost:6379/0")
+	if client == nil {
+		t.Fatalf("expected client")
+	}
+	_ = client.Close()
+}
