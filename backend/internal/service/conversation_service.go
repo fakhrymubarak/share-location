@@ -105,6 +105,14 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 	return conv, members, nil
 }
 
+// ListMembers returns conversation members for broadcasting/authorization helpers.
+func (s *ConversationService) ListMembers(ctx context.Context, conversationID uuid.UUID) ([]domain.ConversationMember, error) {
+	if conversationID == uuid.Nil {
+		return nil, domain.ErrInvalidInput
+	}
+	return s.Memberships.ListByConversation(ctx, conversationID)
+}
+
 func validateConversationRequest(req CreateConversationRequest) error {
 	if req.Type != domain.ConversationTypeDirect && req.Type != domain.ConversationTypeGroup {
 		return domain.ErrInvalidInput

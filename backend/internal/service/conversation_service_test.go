@@ -2,8 +2,11 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/fakhry/share-location/backend/internal/domain"
 	"github.com/fakhry/share-location/backend/internal/repo/memory"
@@ -100,5 +103,12 @@ func TestCreateDirectConversation_RequiresTwoUniqueParticipants(t *testing.T) {
 	}
 	if _, _, err := svc.CreateConversation(context.Background(), req); err != domain.ErrInvalidInput {
 		t.Fatalf("expected ErrInvalidInput, got %v", err)
+	}
+}
+
+func TestListMembersValidation(t *testing.T) {
+	svc := NewConversationService(memory.NewUserRepository(nil), memory.NewConversationRepository(nil), memory.NewMembershipRepository(nil), nil)
+	if _, err := svc.ListMembers(context.Background(), uuid.Nil); !errors.Is(err, domain.ErrInvalidInput) {
+		t.Fatalf("expected invalid input error, got %v", err)
 	}
 }

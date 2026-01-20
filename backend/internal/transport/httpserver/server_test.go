@@ -358,6 +358,86 @@ func TestWebSocketSendChat(t *testing.T) {
 	}
 }
 
+func TestWebSocketSendChatBroadcastsToOtherUser(t *testing.T) {
+	now := time.Date(2026, 1, 7, 11, 5, 0, 0, time.UTC)
+	usersRepo := memory.NewUserRepository(func() time.Time { return now })
+	convRepo := memory.NewConversationRepository(func() time.Time { return now })
+	memberRepo := memory.NewMembershipRepository(func() time.Time { return now })
+	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
+	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
+	liveSvc := service.NewLiveLocationService(memory.NewLiveLocationRepository(func() time.Time { return now }), memberRepo, memory.NewLiveLocationPublisher(), 15*time.Minute, func() time.Time { return now })
+
+	convSvc := service.NewConversationService(usersRepo, convRepo, memberRepo, func() time.Time { return now })
+	msgSvc := service.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now })
+	app := New(Deps{
+		Users:         service.NewUserService(usersRepo),
+		Conversations: convSvc,
+		Messaging:     msgSvc,
+		LiveLocation:  liveSvc,
+	})
+
+	conv, _, err := convSvc.CreateConversation(context.Background(), service.CreateConversationRequest{
+		Type:                 domain.ConversationTypeDirect,
+		ParticipantUsernames: []string{"alice", "bob"},
+	})
+	if err != nil {
+		t.Fatalf("CreateConversation seed error: %v", err)
+	}
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen error: %v", err)
+	}
+	defer ln.Close()
+	go app.Listener(ln)
+
+	wsURL := "ws://" + ln.Addr().String() + "/ws?username=alice"
+	aliceConn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("websocket dial error: %v", err)
+	}
+	defer aliceConn.Close()
+	_, _, _ = aliceConn.ReadMessage() // CONNECTED
+
+	wsURL = "ws://" + ln.Addr().String() + "/ws?username=bob"
+	bobConn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("websocket dial error: %v", err)
+	}
+	defer bobConn.Close()
+	_, _, _ = bobConn.ReadMessage() // CONNECTED
+
+	req := map[string]any{
+		"event":  "SEND_CHAT",
+		"req_id": "r1",
+		"data": map[string]any{
+			"conversation_id": conv.ID.String(),
+			"body":            map[string]any{"text": "hey"},
+			"message_type":    "text",
+			"client_msg_id":   "c1",
+		},
+	}
+	reqBytes, _ := json.Marshal(req)
+	_ = aliceConn.WriteMessage(websocket.TextMessage, reqBytes)
+
+	// Alice receives ack
+	_, _, err = aliceConn.ReadMessage()
+	if err != nil {
+		t.Fatalf("alice read error: %v", err)
+	}
+
+	// Bob receives broadcast
+	_, data, err := bobConn.ReadMessage()
+	if err != nil {
+		t.Fatalf("bob read error: %v", err)
+	}
+	var resp map[string]any
+	_ = json.Unmarshal(data, &resp)
+	if resp["event"] != "RECEIVE_CHAT" {
+		t.Fatalf("expected RECEIVE_CHAT for bob, got %+v", resp)
+	}
+}
+
 func TestWebSocketSendChatInvalidConversation(t *testing.T) {
 	now := time.Date(2026, 1, 7, 11, 15, 0, 0, time.UTC)
 	usersRepo := memory.NewUserRepository(func() time.Time { return now })

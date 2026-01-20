@@ -229,6 +229,7 @@ func wsHandler(users *service.UserService, messaging *service.MessagingService, 
 }
 
 func wsHandlerWithDeps(deps Deps) func(*websocket.Conn) {
+	hub := newConnectionHub(deps.Connections)
 	type envelope struct {
 		Event string          `json:"event"`
 		Data  json.RawMessage `json:"data"`
@@ -297,16 +298,12 @@ func wsHandlerWithDeps(deps Deps) func(*websocket.Conn) {
 			return
 		}
 
-		var connID string
-		if deps.Connections != nil {
-			connID = uuid.NewString()
-			deps.Connections.Add(user.ID, connID)
-			c.SetPongHandler(func(string) error {
-				deps.Connections.Heartbeat(user.ID, connID)
-				return nil
-			})
-			defer deps.Connections.Remove(user.ID, connID)
-		}
+		connID := hub.add(user.ID, c)
+		c.SetPongHandler(func(string) error {
+			hub.heartbeat(user.ID, connID)
+			return nil
+		})
+		defer hub.remove(user.ID, connID)
 		resp := connected{Event: "CONNECTED"}
 		resp.Data.UserID = user.ID.String()
 		resp.Data.Username = user.Username
@@ -355,6 +352,10 @@ func wsHandlerWithDeps(deps Deps) func(*websocket.Conn) {
 				out.Data.CreatedAt = msgRes.CreatedAt.Format(time.RFC3339)
 				respBytes, _ := json.Marshal(out)
 				_ = c.WriteMessage(websocket.TextMessage, respBytes)
+				broadcast := out
+				broadcast.ReqID = ""
+				broadcastBytes, _ := json.Marshal(broadcast)
+				go hub.broadcastToConversation(context.Background(), deps.Conversations, msgRes.ConversationID, connID, broadcastBytes)
 			case "PUBLISH_LIVE_LOCATION":
 				if deps.LiveLocation == nil {
 					continue
@@ -409,6 +410,10 @@ func wsHandlerWithDeps(deps Deps) func(*websocket.Conn) {
 				out.Data.UpdatedAt = point.UpdatedAt.Format(time.RFC3339)
 				respBytes, _ := json.Marshal(out)
 				_ = c.WriteMessage(websocket.TextMessage, respBytes)
+				broadcast := out
+				broadcast.ReqID = ""
+				broadcastBytes, _ := json.Marshal(broadcast)
+				go hub.broadcastToConversation(context.Background(), deps.Conversations, point.ConversationID, connID, broadcastBytes)
 			case "SUBSCRIBE_LIVE_LOCATION":
 				if deps.LiveLocation == nil {
 					continue
