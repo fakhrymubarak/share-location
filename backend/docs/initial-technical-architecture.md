@@ -54,15 +54,16 @@ Errors return `{ "event": "ERROR", "req_id": "<req>", "code": "<string>", "messa
 These support WebSocket flows and provide fallbacks for clients that reconnect.
 
 ## Connection and Delivery Flow
-- On `SEND_CHAT`, server writes to Postgres within a transaction and emits Redis pub/sub event. To avoid duplicates, dedupe by `client_msg_id` + `sender_id`.
-- Each node subscribes to Redis and forwards events to connected users. Missing clients receive deliveries next time they call history endpoints.
+- On `SEND_CHAT`, server writes to Postgres within a transaction and emits Redis pub/sub event. To avoid duplicates, dedupe by `(conversation_id, sender_id, client_msg_id)`.
+- Delivery ordering derives from the persisted row (`created_at`, `id`), not subscription receive order; fan-out uses the stored message payload.
+- Each node subscribes to Redis and forwards events to connected users. If Redis publish/subscription fails, deliver locally, alert/metric the gap, and rely on history pulls for cross-node recovery until Redis reconnects.
 - Live location uses Redis TTL to auto-expire; a cleanup worker trims stale sessions and stops broadcasting expired streams.
 
 ## Caching and Redis Keys
 - `ws:user:{user_id}` set of connection ids for tracing and broadcast targeting.
 - `presence:{user_id}` presence state with TTL refresh heartbeats.
 - `conv:{conversation_id}:messages` Redis channel for chat fan-out.
-- `live:{conversation_id}` channel and `live:{stream_id}` hash (latest point) with TTL.
+- `live:{conversation_id}` channel and `live:{stream_id}` hash (latest point) with TTL capped by server-configured max (default 15 minutes).
 
 ## Scalability and Reliability
 - Stateless API nodes; scale horizontally behind a load balancer with sticky sessions optional (connection registry handles either).
