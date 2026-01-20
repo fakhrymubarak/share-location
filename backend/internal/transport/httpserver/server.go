@@ -34,7 +34,7 @@ func New(deps Deps) *fiber.App {
 	app.Post("/v1/messages/:id/receipt", receiptHandler(deps.Messaging))
 	app.Post("/v1/live-locations", startLiveLocationHandler(deps.LiveLocation))
 
-	app.Use("/ws", websocket.New(wsHandler(deps.Users, deps.Messaging)))
+	app.Use("/ws", websocket.New(wsHandler(deps.Users, deps.Messaging, deps.LiveLocation)))
 
 	return app
 }
@@ -107,14 +107,14 @@ func createConversationHandler(convs *service.ConversationService) fiber.Handler
 
 func listMessagesHandler(msgs *service.MessagingService) fiber.Handler {
 	type response struct {
-		ID             string                 `json:"id"`
-		ConversationID string                 `json:"conversation_id"`
-		SenderID       string                 `json:"sender_id"`
-		MessageType    string                 `json:"message_type"`
-		ClientMsgID    string                 `json:"client_msg_id"`
-		Body           map[string]any         `json:"body"`
-		CreatedAt      string                 `json:"created_at"`
-		Extra          map[string]any         `json:"-"`
+		ID             string         `json:"id"`
+		ConversationID string         `json:"conversation_id"`
+		SenderID       string         `json:"sender_id"`
+		MessageType    string         `json:"message_type"`
+		ClientMsgID    string         `json:"client_msg_id"`
+		Body           map[string]any `json:"body"`
+		CreatedAt      string         `json:"created_at"`
+		Extra          map[string]any `json:"-"`
 	}
 	return func(c *fiber.Ctx) error {
 		idStr := c.Params("id")
@@ -179,9 +179,9 @@ func startLiveLocationHandler(live *service.LiveLocationService) fiber.Handler {
 		TTLSeconds     int    `json:"ttl_seconds,omitempty"`
 	}
 	type response struct {
-		StreamID   string `json:"stream_id"`
-		ExpiresAt  string `json:"expires_at"`
-		UserID     string `json:"user_id"`
+		StreamID       string `json:"stream_id"`
+		ExpiresAt      string `json:"expires_at"`
+		UserID         string `json:"user_id"`
 		ConversationID string `json:"conversation_id,omitempty"`
 	}
 	return func(c *fiber.Ctx) error {
@@ -209,15 +209,15 @@ func startLiveLocationHandler(live *service.LiveLocationService) fiber.Handler {
 			return err
 		}
 		return c.Status(http.StatusOK).JSON(response{
-			StreamID:   session.ID.String(),
-			ExpiresAt:  session.ExpiresAt.Format(time.RFC3339),
-			UserID:     session.UserID.String(),
+			StreamID:       session.ID.String(),
+			ExpiresAt:      session.ExpiresAt.Format(time.RFC3339),
+			UserID:         session.UserID.String(),
 			ConversationID: session.ConversationID.String(),
 		})
 	}
 }
 
-func wsHandler(users *service.UserService, messaging *service.MessagingService) func(*websocket.Conn) {
+func wsHandler(users *service.UserService, messaging *service.MessagingService, live *service.LiveLocationService) func(*websocket.Conn) {
 	type envelope struct {
 		Event string          `json:"event"`
 		Data  json.RawMessage `json:"data"`
@@ -232,21 +232,41 @@ func wsHandler(users *service.UserService, messaging *service.MessagingService) 
 		ReqID string `json:"req_id,omitempty"`
 	}
 	type sendChat struct {
-		ConversationID string                 `json:"conversation_id"`
-		Body           map[string]any         `json:"body"`
-		MessageType    string                 `json:"message_type"`
-		ClientMsgID    string                 `json:"client_msg_id"`
+		ConversationID string         `json:"conversation_id"`
+		Body           map[string]any `json:"body"`
+		MessageType    string         `json:"message_type"`
+		ClientMsgID    string         `json:"client_msg_id"`
 	}
 	type receiveChat struct {
 		Event string `json:"event"`
 		Data  struct {
-			ID             string                 `json:"message_id"`
-			ConversationID string                 `json:"conversation_id"`
-			SenderID       string                 `json:"sender_id"`
-			MessageType    string                 `json:"message_type"`
-			ClientMsgID    string                 `json:"client_msg_id"`
-			Body           map[string]any         `json:"body"`
-			CreatedAt      string                 `json:"created_at"`
+			ID             string         `json:"message_id"`
+			ConversationID string         `json:"conversation_id"`
+			SenderID       string         `json:"sender_id"`
+			MessageType    string         `json:"message_type"`
+			ClientMsgID    string         `json:"client_msg_id"`
+			Body           map[string]any `json:"body"`
+			CreatedAt      string         `json:"created_at"`
+		} `json:"data"`
+		ReqID string `json:"req_id,omitempty"`
+	}
+	type publishLive struct {
+		StreamID       string  `json:"stream_id"`
+		ConversationID string  `json:"conversation_id"`
+		Lat            float64 `json:"lat"`
+		Lng            float64 `json:"lng"`
+		Accuracy       float64 `json:"accuracy"`
+		Speed          float64 `json:"speed"`
+		Heading        float64 `json:"heading"`
+		ExpiresAt      string  `json:"expires_at"`
+	}
+	type liveUpdate struct {
+		Event string `json:"event"`
+		Data  struct {
+			StreamID       string         `json:"stream_id"`
+			ConversationID string         `json:"conversation_id"`
+			Point          map[string]any `json:"point"`
+			UpdatedAt      string         `json:"updated_at"`
 		} `json:"data"`
 		ReqID string `json:"req_id,omitempty"`
 	}
@@ -304,6 +324,56 @@ func wsHandler(users *service.UserService, messaging *service.MessagingService) 
 				out.Data.ClientMsgID = msgRes.ClientMsgID
 				out.Data.Body = msgRes.Body
 				out.Data.CreatedAt = msgRes.CreatedAt.Format(time.RFC3339)
+				respBytes, _ := json.Marshal(out)
+				_ = c.WriteMessage(websocket.TextMessage, respBytes)
+			case "PUBLISH_LIVE_LOCATION":
+				if live == nil {
+					continue
+				}
+				var req publishLive
+				if err := json.Unmarshal(env.Data, &req); err != nil {
+					continue
+				}
+				streamID, err := uuid.Parse(req.StreamID)
+				if err != nil {
+					continue
+				}
+				var convID uuid.UUID
+				if req.ConversationID != "" {
+					convID, err = uuid.Parse(req.ConversationID)
+					if err != nil {
+						continue
+					}
+				}
+				var expires time.Time
+				if req.ExpiresAt != "" {
+					expires, _ = time.Parse(time.RFC3339, req.ExpiresAt)
+				}
+				point, err := live.PublishLocation(context.Background(), service.PublishLocationRequest{
+					StreamID:       streamID,
+					UserID:         user.ID,
+					ConversationID: convID,
+					Lat:            req.Lat,
+					Lng:            req.Lng,
+					Accuracy:       req.Accuracy,
+					Speed:          req.Speed,
+					Heading:        req.Heading,
+					ExpiresAt:      expires,
+				})
+				if err != nil {
+					continue
+				}
+				out := liveUpdate{Event: "SUBSCRIBE_LIVE_LOCATION", ReqID: env.ReqID}
+				out.Data.StreamID = point.StreamID.String()
+				out.Data.ConversationID = point.ConversationID.String()
+				out.Data.Point = map[string]any{
+					"lat":      point.Lat,
+					"lng":      point.Lng,
+					"accuracy": point.Accuracy,
+					"speed":    point.Speed,
+					"heading":  point.Heading,
+				}
+				out.Data.UpdatedAt = point.UpdatedAt.Format(time.RFC3339)
 				respBytes, _ := json.Marshal(out)
 				_ = c.WriteMessage(websocket.TextMessage, respBytes)
 			default:

@@ -329,3 +329,86 @@ func TestWebSocketSendChat(t *testing.T) {
 		t.Fatalf("unexpected response %+v", resp)
 	}
 }
+
+func TestWebSocketPublishLiveLocation(t *testing.T) {
+	now := time.Date(2026, 1, 7, 11, 30, 0, 0, time.UTC)
+	usersRepo := memory.NewUserRepository(func() time.Time { return now })
+	convRepo := memory.NewConversationRepository(func() time.Time { return now })
+	memberRepo := memory.NewMembershipRepository(func() time.Time { return now })
+	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
+	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
+	liveRepo := memory.NewLiveLocationRepository(func() time.Time { return now })
+	livePub := memory.NewLiveLocationPublisher()
+
+	convSvc := service.NewConversationService(usersRepo, convRepo, memberRepo, func() time.Time { return now })
+	msgSvc := service.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now })
+	liveSvc := service.NewLiveLocationService(liveRepo, memberRepo, livePub, 15*time.Minute, func() time.Time { return now })
+	app := New(Deps{
+		Users:         service.NewUserService(usersRepo),
+		Conversations: convSvc,
+		Messaging:     msgSvc,
+		LiveLocation:  liveSvc,
+	})
+
+	conv, _, err := convSvc.CreateConversation(context.Background(), service.CreateConversationRequest{
+		Type:                 domain.ConversationTypeDirect,
+		ParticipantUsernames: []string{"alice", "bob"},
+	})
+	if err != nil {
+		t.Fatalf("CreateConversation seed error: %v", err)
+	}
+	alice, _ := usersRepo.GetByUsername(context.Background(), "alice")
+	session, err := liveSvc.StartSession(context.Background(), service.StartSessionRequest{
+		UserID:         alice.ID,
+		ConversationID: conv.ID,
+		RequestedTTL:   5 * time.Minute,
+	})
+	if err != nil {
+		t.Fatalf("StartSession error: %v", err)
+	}
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen error: %v", err)
+	}
+	defer ln.Close()
+	go app.Listener(ln)
+
+	wsURL := "ws://" + ln.Addr().String() + "/ws?username=alice"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("websocket dial error: %v", err)
+	}
+	defer conn.Close()
+	_, _, _ = conn.ReadMessage() // CONNECTED
+
+	req := map[string]any{
+		"event":  "PUBLISH_LIVE_LOCATION",
+		"req_id": "r2",
+		"data": map[string]any{
+			"stream_id":       session.ID.String(),
+			"conversation_id": conv.ID.String(),
+			"lat":             1.1,
+			"lng":             2.2,
+			"accuracy":        3.3,
+			"speed":           4.4,
+			"heading":         5.5,
+			"expires_at":      session.ExpiresAt.Format(time.RFC3339),
+		},
+	}
+	reqBytes, _ := json.Marshal(req)
+	if err := conn.WriteMessage(websocket.TextMessage, reqBytes); err != nil {
+		t.Fatalf("write message error: %v", err)
+	}
+	_, data, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("read message error: %v", err)
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(data, &resp); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+	if resp["event"] != "SUBSCRIBE_LIVE_LOCATION" || resp["req_id"] != "r2" {
+		t.Fatalf("unexpected response %+v", resp)
+	}
+}
