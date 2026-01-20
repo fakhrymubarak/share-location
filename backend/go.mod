@@ -11,6 +11,8 @@ require (
 )
 
 require (
+	github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a // indirect
+	github.com/alicebob/miniredis/v2 v2.30.0 // indirect
 	github.com/andybalholm/brotli v1.2.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/clipperhouse/stringish v0.1.1 // indirect
@@ -25,6 +27,7 @@ require (
 	github.com/savsgio/gotils v0.0.0-20250924091648-bce9a52d7761 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.69.0 // indirect
+	github.com/yuin/gopher-lua v0.0.0-20220504180219-658193537a64 // indirect
 	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/sys v0.40.0 // indirect
 )
