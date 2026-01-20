@@ -16,6 +16,7 @@ func TestSendChat_PersistsAndPublishes(t *testing.T) {
 	messageRepo := memory.NewMessageRepository(func() time.Time { return now })
 	membershipRepo := memory.NewMembershipRepository(func() time.Time { return now })
 	publisher := memory.NewMessagePublisher()
+	receipts := memory.NewReceiptRepository(func() time.Time { return now })
 
 	conversationID := uuid.New()
 	senderID := uuid.New()
@@ -23,7 +24,7 @@ func TestSendChat_PersistsAndPublishes(t *testing.T) {
 		{ConversationID: conversationID, UserID: senderID, Role: "member", JoinedAt: now},
 	})
 
-	svc := NewMessagingService(messageRepo, membershipRepo, publisher, func() time.Time { return now })
+	svc := NewMessagingService(messageRepo, membershipRepo, publisher, receipts, func() time.Time { return now })
 	req := SendChatRequest{
 		ConversationID: conversationID,
 		SenderID:       senderID,
@@ -68,6 +69,7 @@ func TestSendChat_AllowsNilPublisher(t *testing.T) {
 	now := time.Date(2026, 1, 4, 10, 0, 0, 0, time.UTC)
 	messageRepo := memory.NewMessageRepository(func() time.Time { return now })
 	membershipRepo := memory.NewMembershipRepository(func() time.Time { return now })
+	receipts := memory.NewReceiptRepository(func() time.Time { return now })
 
 	conversationID := uuid.New()
 	senderID := uuid.New()
@@ -75,7 +77,7 @@ func TestSendChat_AllowsNilPublisher(t *testing.T) {
 		{ConversationID: conversationID, UserID: senderID, Role: "member", JoinedAt: now},
 	})
 
-	svc := NewMessagingService(messageRepo, membershipRepo, nil, func() time.Time { return now })
+	svc := NewMessagingService(messageRepo, membershipRepo, nil, receipts, func() time.Time { return now })
 	_, created, err := svc.SendChat(context.Background(), SendChatRequest{
 		ConversationID: conversationID,
 		SenderID:       senderID,
@@ -95,7 +97,8 @@ func TestSendChat_ValidatesMembershipAndInput(t *testing.T) {
 	now := time.Now()
 	messageRepo := memory.NewMessageRepository(nil)
 	membershipRepo := memory.NewMembershipRepository(nil)
-	svc := NewMessagingService(messageRepo, membershipRepo, nil, func() time.Time { return now })
+	receipts := memory.NewReceiptRepository(nil)
+	svc := NewMessagingService(messageRepo, membershipRepo, nil, receipts, func() time.Time { return now })
 
 	conversationID := uuid.New()
 	senderID := uuid.New()
@@ -142,5 +145,61 @@ func TestSendChat_ValidatesMembershipAndInput(t *testing.T) {
 	})
 	if err != domain.ErrInvalidInput {
 		t.Fatalf("expected ErrInvalidInput for blank message type, got %v", err)
+	}
+}
+
+func TestListHistoryAndReceipts(t *testing.T) {
+	now := time.Date(2026, 1, 4, 11, 0, 0, 0, time.UTC)
+	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
+	memberRepo := memory.NewMembershipRepository(func() time.Time { return now })
+	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
+	svc := NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now })
+
+	convID := uuid.New()
+	sender := uuid.New()
+	_ = memberRepo.Add(context.Background(), []domain.ConversationMember{
+		{ConversationID: convID, UserID: sender, Role: "member", JoinedAt: now},
+	})
+
+	// Insert two messages.
+	_, _, _ = svc.SendChat(context.Background(), SendChatRequest{
+		ConversationID: convID,
+		SenderID:       sender,
+		Body:           map[string]any{"text": "m1"},
+		MessageType:    "text",
+		ClientMsgID:    "c1",
+	})
+	_, _, _ = svc.SendChat(context.Background(), SendChatRequest{
+		ConversationID: convID,
+		SenderID:       sender,
+		Body:           map[string]any{"text": "m2"},
+		MessageType:    "text",
+		ClientMsgID:    "c2",
+	})
+	msgs, err := svc.ListHistory(context.Background(), convID, 10)
+	if err != nil {
+		t.Fatalf("ListHistory error: %v", err)
+	}
+	if len(msgs) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(msgs))
+	}
+
+	// Receipts
+	msgID := msgs[0].ID
+	userID := uuid.New()
+	err = svc.UpsertReceipt(context.Background(), ReceiptRequest{
+		MessageID: msgID,
+		UserID:    userID,
+		Status:    "read",
+	})
+	if err != nil {
+		t.Fatalf("UpsertReceipt error: %v", err)
+	}
+	list, err := rcRepo.ListByMessage(context.Background(), msgID)
+	if err != nil {
+		t.Fatalf("ListByMessage error: %v", err)
+	}
+	if len(list) != 1 || list[0].Status != "read" {
+		t.Fatalf("unexpected receipts %+v", list)
 	}
 }

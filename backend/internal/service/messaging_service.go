@@ -15,10 +15,11 @@ type MessagingService struct {
 	Messages    repo.MessageRepository
 	Memberships repo.MembershipRepository
 	Publisher   repo.MessagePublisher
+	Receipts    repo.ReceiptRepository
 	now         func() time.Time
 }
 
-func NewMessagingService(messages repo.MessageRepository, memberships repo.MembershipRepository, publisher repo.MessagePublisher, now func() time.Time) *MessagingService {
+func NewMessagingService(messages repo.MessageRepository, memberships repo.MembershipRepository, publisher repo.MessagePublisher, receipts repo.ReceiptRepository, now func() time.Time) *MessagingService {
 	if now == nil {
 		now = time.Now
 	}
@@ -26,6 +27,7 @@ func NewMessagingService(messages repo.MessageRepository, memberships repo.Membe
 		Messages:    messages,
 		Memberships: memberships,
 		Publisher:   publisher,
+		Receipts:    receipts,
 		now:         now,
 	}
 }
@@ -72,6 +74,37 @@ func (s *MessagingService) SendChat(ctx context.Context, req SendChatRequest) (d
 		}
 	}
 	return stored, created, nil
+}
+
+// ListHistory returns ordered messages for a conversation limited by count.
+func (s *MessagingService) ListHistory(ctx context.Context, conversationID uuid.UUID, limit int) ([]domain.Message, error) {
+	if conversationID == uuid.Nil {
+		return nil, domain.ErrInvalidInput
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	return s.Messages.ListByConversation(ctx, conversationID, limit)
+}
+
+type ReceiptRequest struct {
+	MessageID uuid.UUID
+	UserID    uuid.UUID
+	Status    string
+}
+
+// UpsertReceipt records delivery/read status.
+func (s *MessagingService) UpsertReceipt(ctx context.Context, req ReceiptRequest) error {
+	if req.MessageID == uuid.Nil || req.UserID == uuid.Nil || strings.TrimSpace(req.Status) == "" {
+		return domain.ErrInvalidInput
+	}
+	receipt := domain.DeliveryReceipt{
+		MessageID: req.MessageID,
+		UserID:    req.UserID,
+		Status:    req.Status,
+		UpdatedAt: s.now(),
+	}
+	return s.Receipts.Upsert(ctx, receipt)
 }
 
 func validateSendChat(req SendChatRequest) error {

@@ -51,3 +51,9 @@ type LiveLocationRepository interface {
 type LiveLocationPublisher interface {
 	PublishLiveLocation(ctx context.Context, point domain.LiveLocationPoint) error
 }
+
+// ReceiptRepository manages delivery/read receipts.
+type ReceiptRepository interface {
+	Upsert(ctx context.Context, receipt domain.DeliveryReceipt) error
+	ListByMessage(ctx context.Context, messageID uuid.UUID) ([]domain.DeliveryReceipt, error)
+}
