@@ -260,20 +260,20 @@ func wsHandler(users *service.UserService, messaging *service.MessagingService, 
 		Heading        float64 `json:"heading"`
 		ExpiresAt      string  `json:"expires_at"`
 	}
-type liveUpdate struct {
-	Event string `json:"event"`
-	Data  struct {
-		StreamID       string         `json:"stream_id"`
-		ConversationID string         `json:"conversation_id"`
-		Point          map[string]any `json:"point"`
-		UpdatedAt      string         `json:"updated_at"`
-	} `json:"data"`
-	ReqID string `json:"req_id,omitempty"`
-}
-type subscribeLive struct {
-	StreamID       string `json:"stream_id"`
-	ConversationID string `json:"conversation_id"`
-}
+	type liveUpdate struct {
+		Event string `json:"event"`
+		Data  struct {
+			StreamID       string         `json:"stream_id"`
+			ConversationID string         `json:"conversation_id"`
+			Point          map[string]any `json:"point"`
+			UpdatedAt      string         `json:"updated_at"`
+		} `json:"data"`
+		ReqID string `json:"req_id,omitempty"`
+	}
+	type subscribeLive struct {
+		StreamID       string `json:"stream_id"`
+		ConversationID string `json:"conversation_id"`
+	}
 	return func(c *websocket.Conn) {
 		username := c.Query("username")
 		if username == "" {
@@ -304,10 +304,12 @@ type subscribeLive struct {
 			case "SEND_CHAT":
 				var req sendChat
 				if err := json.Unmarshal(env.Data, &req); err != nil {
+					sendError(c, env.ReqID, "invalid_payload", "bad send_chat payload")
 					continue
 				}
 				convID, err := uuid.Parse(req.ConversationID)
 				if err != nil {
+					sendError(c, env.ReqID, "invalid_conversation", "invalid conversation_id")
 					continue
 				}
 				msgRes, _, err := messaging.SendChat(context.Background(), service.SendChatRequest{
@@ -318,6 +320,7 @@ type subscribeLive struct {
 					ClientMsgID:    req.ClientMsgID,
 				})
 				if err != nil {
+					sendError(c, env.ReqID, errorCode(err), err.Error())
 					continue
 				}
 				out := receiveChat{Event: "RECEIVE_CHAT", ReqID: env.ReqID}
@@ -336,16 +339,19 @@ type subscribeLive struct {
 				}
 				var req publishLive
 				if err := json.Unmarshal(env.Data, &req); err != nil {
+					sendError(c, env.ReqID, "invalid_payload", "bad live payload")
 					continue
 				}
 				streamID, err := uuid.Parse(req.StreamID)
 				if err != nil {
+					sendError(c, env.ReqID, "invalid_stream", "invalid stream_id")
 					continue
 				}
 				var convID uuid.UUID
 				if req.ConversationID != "" {
 					convID, err = uuid.Parse(req.ConversationID)
 					if err != nil {
+						sendError(c, env.ReqID, "invalid_conversation", "invalid conversation_id")
 						continue
 					}
 				}
@@ -365,6 +371,7 @@ type subscribeLive struct {
 					ExpiresAt:      expires,
 				})
 				if err != nil {
+					sendError(c, env.ReqID, errorCode(err), err.Error())
 					continue
 				}
 				out := liveUpdate{Event: "SUBSCRIBE_LIVE_LOCATION", ReqID: env.ReqID}
@@ -386,14 +393,17 @@ type subscribeLive struct {
 				}
 				var req subscribeLive
 				if err := json.Unmarshal(env.Data, &req); err != nil {
+					sendError(c, env.ReqID, "invalid_payload", "bad subscribe payload")
 					continue
 				}
 				streamID, err := uuid.Parse(req.StreamID)
 				if err != nil {
+					sendError(c, env.ReqID, "invalid_stream", "invalid stream_id")
 					continue
 				}
 				point, err := live.Sessions.GetPoint(context.Background(), streamID)
 				if err != nil {
+					sendError(c, env.ReqID, errorCode(err), err.Error())
 					continue
 				}
 				out := liveUpdate{Event: "SUBSCRIBE_LIVE_LOCATION", ReqID: env.ReqID}
@@ -425,4 +435,30 @@ func errorHandler(c *fiber.Ctx, err error) error {
 		status = http.StatusForbidden
 	}
 	return c.Status(status).JSON(fiber.Map{"error": err.Error()})
+}
+
+func sendError(c *websocket.Conn, reqID, code, msg string) {
+	payload := map[string]any{
+		"event":  "ERROR",
+		"req_id": reqID,
+		"data": map[string]any{
+			"code":    code,
+			"message": msg,
+		},
+	}
+	b, _ := json.Marshal(payload)
+	_ = c.WriteMessage(websocket.TextMessage, b)
+}
+
+func errorCode(err error) string {
+	switch {
+	case errors.Is(err, domain.ErrInvalidInput):
+		return "invalid_input"
+	case errors.Is(err, domain.ErrForbidden):
+		return "forbidden"
+	case errors.Is(err, domain.ErrNotFound):
+		return "not_found"
+	default:
+		return "internal"
+	}
 }

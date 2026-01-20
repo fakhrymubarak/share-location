@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"errors"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
@@ -254,8 +255,12 @@ func TestWebSocketHandshakeInvalidUsername(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read message error: %v", err)
 	}
-	if string(data) == "" {
-		t.Fatalf("expected error payload")
+	var resp map[string]any
+	if err := json.Unmarshal(data, &resp); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+	if resp["event"] != "ERROR" {
+		t.Fatalf("expected ERROR event, got %+v", resp)
 	}
 }
 
@@ -327,6 +332,52 @@ func TestWebSocketSendChat(t *testing.T) {
 	}
 	if resp["event"] != "RECEIVE_CHAT" || resp["req_id"] != "r1" {
 		t.Fatalf("unexpected response %+v", resp)
+	}
+}
+
+func TestWebSocketSendChatInvalidConversation(t *testing.T) {
+	now := time.Date(2026, 1, 7, 11, 15, 0, 0, time.UTC)
+	usersRepo := memory.NewUserRepository(func() time.Time { return now })
+	convRepo := memory.NewConversationRepository(func() time.Time { return now })
+	memberRepo := memory.NewMembershipRepository(func() time.Time { return now })
+	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
+	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
+	app := New(Deps{
+		Users:         service.NewUserService(usersRepo),
+		Conversations: service.NewConversationService(usersRepo, convRepo, memberRepo, func() time.Time { return now }),
+		Messaging:     service.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now }),
+		LiveLocation:  service.NewLiveLocationService(memory.NewLiveLocationRepository(func() time.Time { return now }), memberRepo, memory.NewLiveLocationPublisher(), 15*time.Minute, func() time.Time { return now }),
+	})
+
+	ln, _ := net.Listen("tcp", "127.0.0.1:0")
+	defer ln.Close()
+	go app.Listener(ln)
+
+	wsURL := "ws://" + ln.Addr().String() + "/ws?username=alice"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial error: %v", err)
+	}
+	defer conn.Close()
+	_, _, _ = conn.ReadMessage() // connected
+
+	req := map[string]any{
+		"event":  "SEND_CHAT",
+		"req_id": "bad1",
+		"data": map[string]any{
+			"conversation_id": "bad",
+			"body":            map[string]any{"text": "hi"},
+			"message_type":    "text",
+			"client_msg_id":   "c1",
+		},
+	}
+	reqBytes, _ := json.Marshal(req)
+	_ = conn.WriteMessage(websocket.TextMessage, reqBytes)
+	_, data, _ := conn.ReadMessage()
+	var resp map[string]any
+	_ = json.Unmarshal(data, &resp)
+	if resp["event"] != "ERROR" || resp["req_id"] != "bad1" {
+		t.Fatalf("expected error response, got %+v", resp)
 	}
 }
 
@@ -433,5 +484,107 @@ func TestWebSocketPublishLiveLocation(t *testing.T) {
 	}
 	if resp["event"] != "SUBSCRIBE_LIVE_LOCATION" || resp["req_id"] != "r3" {
 		t.Fatalf("unexpected subscribe response %+v", resp)
+	}
+}
+
+func TestWebSocketSubscribeInvalidStream(t *testing.T) {
+	now := time.Date(2026, 1, 7, 12, 0, 0, 0, time.UTC)
+	usersRepo := memory.NewUserRepository(func() time.Time { return now })
+	convRepo := memory.NewConversationRepository(func() time.Time { return now })
+	memberRepo := memory.NewMembershipRepository(func() time.Time { return now })
+	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
+	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
+	app := New(Deps{
+		Users:         service.NewUserService(usersRepo),
+		Conversations: service.NewConversationService(usersRepo, convRepo, memberRepo, func() time.Time { return now }),
+		Messaging:     service.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now }),
+		LiveLocation:  service.NewLiveLocationService(memory.NewLiveLocationRepository(func() time.Time { return now }), memberRepo, memory.NewLiveLocationPublisher(), 15*time.Minute, func() time.Time { return now }),
+	})
+
+	ln, _ := net.Listen("tcp", "127.0.0.1:0")
+	defer ln.Close()
+	go app.Listener(ln)
+
+	wsURL := "ws://" + ln.Addr().String() + "/ws?username=alice"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial error: %v", err)
+	}
+	defer conn.Close()
+	_, _, _ = conn.ReadMessage()
+
+	req := map[string]any{
+		"event":  "SUBSCRIBE_LIVE_LOCATION",
+		"req_id": "badstream",
+		"data": map[string]any{
+			"stream_id": "not-a-uuid",
+		},
+	}
+	reqBytes, _ := json.Marshal(req)
+	_ = conn.WriteMessage(websocket.TextMessage, reqBytes)
+	_, data, _ := conn.ReadMessage()
+	var resp map[string]any
+	_ = json.Unmarshal(data, &resp)
+	if resp["event"] != "ERROR" || resp["req_id"] != "badstream" {
+		t.Fatalf("expected error response for bad stream, got %+v", resp)
+	}
+}
+
+func TestWebSocketPublishLiveLocationMissingSession(t *testing.T) {
+	now := time.Date(2026, 1, 7, 12, 15, 0, 0, time.UTC)
+	usersRepo := memory.NewUserRepository(func() time.Time { return now })
+	convRepo := memory.NewConversationRepository(func() time.Time { return now })
+	memberRepo := memory.NewMembershipRepository(func() time.Time { return now })
+	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
+	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
+	liveRepo := memory.NewLiveLocationRepository(func() time.Time { return now })
+	app := New(Deps{
+		Users:         service.NewUserService(usersRepo),
+		Conversations: service.NewConversationService(usersRepo, convRepo, memberRepo, func() time.Time { return now }),
+		Messaging:     service.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now }),
+		LiveLocation:  service.NewLiveLocationService(liveRepo, memberRepo, memory.NewLiveLocationPublisher(), 15*time.Minute, func() time.Time { return now }),
+	})
+
+	ln, _ := net.Listen("tcp", "127.0.0.1:0")
+	defer ln.Close()
+	go app.Listener(ln)
+
+	wsURL := "ws://" + ln.Addr().String() + "/ws?username=alice"
+	conn, _, _ := websocket.DefaultDialer.Dial(wsURL, nil)
+	defer conn.Close()
+	_, _, _ = conn.ReadMessage()
+
+	req := map[string]any{
+		"event":  "PUBLISH_LIVE_LOCATION",
+		"req_id": "missing",
+		"data": map[string]any{
+			"stream_id":       uuid.New().String(),
+			"conversation_id": uuid.New().String(),
+			"lat":             0,
+			"lng":             0,
+		},
+	}
+	reqBytes, _ := json.Marshal(req)
+	_ = conn.WriteMessage(websocket.TextMessage, reqBytes)
+	_, data, _ := conn.ReadMessage()
+	var resp map[string]any
+	_ = json.Unmarshal(data, &resp)
+	if resp["event"] != "ERROR" || resp["req_id"] != "missing" {
+		t.Fatalf("expected error response for missing session, got %+v", resp)
+	}
+}
+
+func TestErrorCodeHelper(t *testing.T) {
+	if code := errorCode(domain.ErrInvalidInput); code != "invalid_input" {
+		t.Fatalf("unexpected code %s", code)
+	}
+	if code := errorCode(domain.ErrForbidden); code != "forbidden" {
+		t.Fatalf("unexpected code %s", code)
+	}
+	if code := errorCode(domain.ErrNotFound); code != "not_found" {
+		t.Fatalf("unexpected code %s", code)
+	}
+	if code := errorCode(errors.New("x")); code != "internal" {
+		t.Fatalf("unexpected code %s", code)
 	}
 }
