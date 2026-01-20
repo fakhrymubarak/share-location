@@ -23,12 +23,18 @@ type Deps struct {
 	Messaging     *service.MessagingService
 	LiveLocation  *service.LiveLocationService
 	Connections   *registry.Registry
+	Hub           *ConnectionHub
+	RedisFanout   bool
 }
 
 func New(deps Deps) *fiber.App {
 	app := fiber.New(fiber.Config{
 		ErrorHandler: errorHandler,
 	})
+
+	if deps.Hub == nil {
+		deps.Hub = NewConnectionHub(deps.Connections)
+	}
 
 	app.Get("/health", func(c *fiber.Ctx) error { return c.SendStatus(http.StatusOK) })
 	app.Post("/v1/login", loginHandler(deps.Users))
@@ -229,7 +235,7 @@ func wsHandler(users *service.UserService, messaging *service.MessagingService, 
 }
 
 func wsHandlerWithDeps(deps Deps) func(*websocket.Conn) {
-	hub := newConnectionHub(deps.Connections)
+	hub := deps.Hub
 	type envelope struct {
 		Event string          `json:"event"`
 		Data  json.RawMessage `json:"data"`
@@ -352,10 +358,12 @@ func wsHandlerWithDeps(deps Deps) func(*websocket.Conn) {
 				out.Data.CreatedAt = msgRes.CreatedAt.Format(time.RFC3339)
 				respBytes, _ := json.Marshal(out)
 				_ = c.WriteMessage(websocket.TextMessage, respBytes)
-				broadcast := out
-				broadcast.ReqID = ""
-				broadcastBytes, _ := json.Marshal(broadcast)
-				go hub.broadcastToConversation(context.Background(), deps.Conversations, msgRes.ConversationID, connID, broadcastBytes)
+				if !deps.RedisFanout {
+					broadcast := out
+					broadcast.ReqID = ""
+					broadcastBytes, _ := json.Marshal(broadcast)
+					go hub.BroadcastToConversation(context.Background(), deps.Conversations, msgRes.ConversationID, connID, broadcastBytes)
+				}
 			case "PUBLISH_LIVE_LOCATION":
 				if deps.LiveLocation == nil {
 					continue
@@ -410,10 +418,12 @@ func wsHandlerWithDeps(deps Deps) func(*websocket.Conn) {
 				out.Data.UpdatedAt = point.UpdatedAt.Format(time.RFC3339)
 				respBytes, _ := json.Marshal(out)
 				_ = c.WriteMessage(websocket.TextMessage, respBytes)
-				broadcast := out
-				broadcast.ReqID = ""
-				broadcastBytes, _ := json.Marshal(broadcast)
-				go hub.broadcastToConversation(context.Background(), deps.Conversations, point.ConversationID, connID, broadcastBytes)
+				if !deps.RedisFanout {
+					broadcast := out
+					broadcast.ReqID = ""
+					broadcastBytes, _ := json.Marshal(broadcast)
+					go hub.BroadcastToConversation(context.Background(), deps.Conversations, point.ConversationID, connID, broadcastBytes)
+				}
 			case "SUBSCRIBE_LIVE_LOCATION":
 				if deps.LiveLocation == nil {
 					continue

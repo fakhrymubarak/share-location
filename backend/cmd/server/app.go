@@ -71,6 +71,8 @@ func buildApp(cfg *config.Config) (*fiber.App, int) {
 	var msgPublisher repo.MessagePublisher = memory.NewMessagePublisher()
 	var livePublisher repo.LiveLocationPublisher = memory.NewLiveLocationPublisher()
 	connRegistry := registry.New(seconds(cfg.Server.Websocket.IdleTimeoutSeconds), nil)
+	hub := httpserver.NewConnectionHub(connRegistry)
+	useRedisFanout := false
 
 	if pgPool != nil {
 		usersRepo = pgrepo.NewUserRepository(pgPool)
@@ -89,6 +91,7 @@ func buildApp(cfg *config.Config) (*fiber.App, int) {
 		} else {
 			liveRepo = redisLive
 		}
+		useRedisFanout = true
 	}
 
 	userSvc := service.NewUserService(usersRepo)
@@ -102,7 +105,14 @@ func buildApp(cfg *config.Config) (*fiber.App, int) {
 		Messaging:     msgSvc,
 		LiveLocation:  liveSvc,
 		Connections:   connRegistry,
+		Hub:           hub,
+		RedisFanout:   useRedisFanout,
 	})
+
+	if useRedisFanout && redisCli != nil {
+		ctx := context.Background()
+		startRedisFanout(ctx, redisCli, hub, convSvc)
+	}
 
 	port := cfg.Server.Port
 	if port == 0 {

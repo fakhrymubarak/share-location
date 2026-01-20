@@ -12,8 +12,8 @@ import (
 	"github.com/fakhry/share-location/backend/internal/ws/registry"
 )
 
-// connectionHub tracks active WebSocket connections and dispatches events to members.
-type connectionHub struct {
+// ConnectionHub tracks active WebSocket connections and dispatches events to members.
+type ConnectionHub struct {
 	reg     *registry.Registry
 	mu      sync.Mutex
 	conns   map[string]*websocket.Conn
@@ -21,18 +21,19 @@ type connectionHub struct {
 	expires time.Duration
 }
 
-func newConnectionHub(reg *registry.Registry) *connectionHub {
+// NewConnectionHub builds a ConnectionHub with the provided registry.
+func NewConnectionHub(reg *registry.Registry) *ConnectionHub {
 	if reg == nil {
 		reg = registry.New(2*time.Minute, nil)
 	}
-	return &connectionHub{
+	return &ConnectionHub{
 		reg:    reg,
 		conns:  make(map[string]*websocket.Conn),
 		owners: make(map[string]uuid.UUID),
 	}
 }
 
-func (h *connectionHub) add(userID uuid.UUID, conn *websocket.Conn) string {
+func (h *ConnectionHub) add(userID uuid.UUID, conn *websocket.Conn) string {
 	if h == nil {
 		return ""
 	}
@@ -45,14 +46,14 @@ func (h *connectionHub) add(userID uuid.UUID, conn *websocket.Conn) string {
 	return connID
 }
 
-func (h *connectionHub) heartbeat(userID uuid.UUID, connID string) {
+func (h *ConnectionHub) heartbeat(userID uuid.UUID, connID string) {
 	if h == nil {
 		return
 	}
 	h.reg.Heartbeat(userID, connID)
 }
 
-func (h *connectionHub) remove(userID uuid.UUID, connID string) {
+func (h *ConnectionHub) remove(userID uuid.UUID, connID string) {
 	if h == nil {
 		return
 	}
@@ -63,7 +64,8 @@ func (h *connectionHub) remove(userID uuid.UUID, connID string) {
 	h.reg.Remove(userID, connID)
 }
 
-func (h *connectionHub) broadcastToConversation(ctx context.Context, convSvc *service.ConversationService, convID uuid.UUID, excludeConnID string, payload []byte) {
+// BroadcastToConversation delivers payload to all members' connections except the excluded one.
+func (h *ConnectionHub) BroadcastToConversation(ctx context.Context, convSvc *service.ConversationService, convID uuid.UUID, excludeConnID string, payload []byte) {
 	if h == nil || convSvc == nil || convID == uuid.Nil {
 		return
 	}
@@ -76,7 +78,7 @@ func (h *connectionHub) broadcastToConversation(ctx context.Context, convSvc *se
 	}
 }
 
-func (h *connectionHub) sendToUser(userID uuid.UUID, excludeConnID string, payload []byte) {
+func (h *ConnectionHub) sendToUser(userID uuid.UUID, excludeConnID string, payload []byte) {
 	ids := h.reg.Connections(userID)
 	for _, id := range ids {
 		if id == excludeConnID {
