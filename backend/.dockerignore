@@ -1,0 +1,19 @@
+# Build artifacts
+bin
+build
+*.exe
+*.out
+coverage.out
+
+# VCS
+.git
+.githooks
+
+# Editor/OS
+.DS_Store
+.idea
+.vscode
+
+# Dependency caches
+**/node_modules
+**/vendor
