@@ -27,3 +27,14 @@ type MembershipRepository interface {
 	IsMember(ctx context.Context, conversationID, userID uuid.UUID) (bool, error)
 	ListByConversation(ctx context.Context, conversationID uuid.UUID) ([]domain.ConversationMember, error)
 }
+
+// MessageRepository manages chat messages with idempotency.
+type MessageRepository interface {
+	InsertOrGet(ctx context.Context, msg domain.Message) (saved domain.Message, created bool, err error)
+	ListByConversation(ctx context.Context, conversationID uuid.UUID, limit int) ([]domain.Message, error)
+}
+
+// MessagePublisher publishes messages for fan-out.
+type MessagePublisher interface {
+	PublishMessage(ctx context.Context, msg domain.Message) error
+}
