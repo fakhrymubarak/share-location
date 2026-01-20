@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+
+COVERAGE_THRESHOLD=85
+
+echo "Running tests with coverage check..."
+go test -coverprofile=coverage.out ./...
+
+TOTAL_RAW=$(go tool cover -func=coverage.out | grep total: | awk '{print $3}')
+TOTAL=${TOTAL_RAW%\%}
+
+awk "BEGIN {exit !($TOTAL >= $COVERAGE_THRESHOLD)}" || {
+  echo "Coverage $TOTAL_RAW is below threshold ${COVERAGE_THRESHOLD}%."
+  exit 1
+}
+
+echo "Coverage OK: ${TOTAL_RAW}"
