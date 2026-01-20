@@ -32,7 +32,7 @@ func New(deps Deps) *fiber.App {
 	app.Get("/v1/conversations/:id/messages", listMessagesHandler(deps.Messaging))
 	app.Post("/v1/messages/:id/receipt", receiptHandler(deps.Messaging))
 
-	app.Use("/ws", websocket.New(wsHandler(deps.Users)))
+	app.Use("/ws", websocket.New(wsHandler(deps.Users, deps.Messaging)))
 
 	return app
 }
@@ -170,13 +170,38 @@ func receiptHandler(msgs *service.MessagingService) fiber.Handler {
 	}
 }
 
-func wsHandler(users *service.UserService) func(*websocket.Conn) {
+func wsHandler(users *service.UserService, messaging *service.MessagingService) func(*websocket.Conn) {
+	type envelope struct {
+		Event string          `json:"event"`
+		Data  json.RawMessage `json:"data"`
+		ReqID string          `json:"req_id"`
+	}
 	type connected struct {
 		Event string `json:"event"`
 		Data  struct {
 			UserID   string `json:"user_id"`
 			Username string `json:"username"`
 		} `json:"data"`
+		ReqID string `json:"req_id,omitempty"`
+	}
+	type sendChat struct {
+		ConversationID string                 `json:"conversation_id"`
+		Body           map[string]any         `json:"body"`
+		MessageType    string                 `json:"message_type"`
+		ClientMsgID    string                 `json:"client_msg_id"`
+	}
+	type receiveChat struct {
+		Event string `json:"event"`
+		Data  struct {
+			ID             string                 `json:"message_id"`
+			ConversationID string                 `json:"conversation_id"`
+			SenderID       string                 `json:"sender_id"`
+			MessageType    string                 `json:"message_type"`
+			ClientMsgID    string                 `json:"client_msg_id"`
+			Body           map[string]any         `json:"body"`
+			CreatedAt      string                 `json:"created_at"`
+		} `json:"data"`
+		ReqID string `json:"req_id,omitempty"`
 	}
 	return func(c *websocket.Conn) {
 		username := c.Query("username")
@@ -194,6 +219,50 @@ func wsHandler(users *service.UserService) func(*websocket.Conn) {
 		resp.Data.Username = user.Username
 		payload, _ := json.Marshal(resp)
 		_ = c.WriteMessage(websocket.TextMessage, payload)
+
+		for {
+			_, msg, err := c.ReadMessage()
+			if err != nil {
+				return
+			}
+			var env envelope
+			if err := json.Unmarshal(msg, &env); err != nil {
+				continue
+			}
+			switch env.Event {
+			case "SEND_CHAT":
+				var req sendChat
+				if err := json.Unmarshal(env.Data, &req); err != nil {
+					continue
+				}
+				convID, err := uuid.Parse(req.ConversationID)
+				if err != nil {
+					continue
+				}
+				msgRes, _, err := messaging.SendChat(context.Background(), service.SendChatRequest{
+					ConversationID: convID,
+					SenderID:       user.ID,
+					Body:           req.Body,
+					MessageType:    req.MessageType,
+					ClientMsgID:    req.ClientMsgID,
+				})
+				if err != nil {
+					continue
+				}
+				out := receiveChat{Event: "RECEIVE_CHAT", ReqID: env.ReqID}
+				out.Data.ID = msgRes.ID.String()
+				out.Data.ConversationID = msgRes.ConversationID.String()
+				out.Data.SenderID = msgRes.SenderID.String()
+				out.Data.MessageType = msgRes.MessageType
+				out.Data.ClientMsgID = msgRes.ClientMsgID
+				out.Data.Body = msgRes.Body
+				out.Data.CreatedAt = msgRes.CreatedAt.Format(time.RFC3339)
+				respBytes, _ := json.Marshal(out)
+				_ = c.WriteMessage(websocket.TextMessage, respBytes)
+			default:
+				// ignore
+			}
+		}
 	}
 }
 

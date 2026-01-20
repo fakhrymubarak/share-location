@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
+	"github.com/fakhry/share-location/backend/internal/domain"
 	"github.com/fakhry/share-location/backend/internal/repo/memory"
 	"github.com/fakhry/share-location/backend/internal/service"
 )
@@ -232,5 +233,74 @@ func TestWebSocketHandshakeInvalidUsername(t *testing.T) {
 	}
 	if string(data) == "" {
 		t.Fatalf("expected error payload")
+	}
+}
+
+func TestWebSocketSendChat(t *testing.T) {
+	now := time.Date(2026, 1, 7, 11, 0, 0, 0, time.UTC)
+	usersRepo := memory.NewUserRepository(func() time.Time { return now })
+	convRepo := memory.NewConversationRepository(func() time.Time { return now })
+	memberRepo := memory.NewMembershipRepository(func() time.Time { return now })
+	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
+	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
+
+	convSvc := service.NewConversationService(usersRepo, convRepo, memberRepo, func() time.Time { return now })
+	msgSvc := service.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now })
+	app := New(Deps{
+		Users:         service.NewUserService(usersRepo),
+		Conversations: convSvc,
+		Messaging:     msgSvc,
+	})
+
+	// Seed conversation and membership.
+	conv, _, err := convSvc.CreateConversation(context.Background(), service.CreateConversationRequest{
+		Type:                 domain.ConversationTypeDirect,
+		ParticipantUsernames: []string{"alice", "bob"},
+	})
+	if err != nil {
+		t.Fatalf("CreateConversation seed error: %v", err)
+	}
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen error: %v", err)
+	}
+	defer ln.Close()
+	go app.Listener(ln)
+
+	wsURL := "ws://" + ln.Addr().String() + "/ws?username=alice"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("websocket dial error: %v", err)
+	}
+	defer conn.Close()
+
+	_, _, _ = conn.ReadMessage() // consume CONNECTED
+
+	req := map[string]any{
+		"event":  "SEND_CHAT",
+		"req_id": "r1",
+		"data": map[string]any{
+			"conversation_id": conv.ID.String(),
+			"body":            map[string]any{"text": "hello"},
+			"message_type":    "text",
+			"client_msg_id":   "c1",
+		},
+	}
+	reqBytes, _ := json.Marshal(req)
+	if err := conn.WriteMessage(websocket.TextMessage, reqBytes); err != nil {
+		t.Fatalf("write message error: %v", err)
+	}
+
+	_, data, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("read message error: %v", err)
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(data, &resp); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+	if resp["event"] != "RECEIVE_CHAT" || resp["req_id"] != "r1" {
+		t.Fatalf("unexpected response %+v", resp)
 	}
 }
