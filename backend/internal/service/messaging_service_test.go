@@ -64,6 +64,33 @@ func TestSendChat_PersistsAndPublishes(t *testing.T) {
 	}
 }
 
+func TestSendChat_AllowsNilPublisher(t *testing.T) {
+	now := time.Date(2026, 1, 4, 10, 0, 0, 0, time.UTC)
+	messageRepo := memory.NewMessageRepository(func() time.Time { return now })
+	membershipRepo := memory.NewMembershipRepository(func() time.Time { return now })
+
+	conversationID := uuid.New()
+	senderID := uuid.New()
+	_ = membershipRepo.Add(context.Background(), []domain.ConversationMember{
+		{ConversationID: conversationID, UserID: senderID, Role: "member", JoinedAt: now},
+	})
+
+	svc := NewMessagingService(messageRepo, membershipRepo, nil, func() time.Time { return now })
+	_, created, err := svc.SendChat(context.Background(), SendChatRequest{
+		ConversationID: conversationID,
+		SenderID:       senderID,
+		Body:           map[string]any{"text": "hi"},
+		MessageType:    "text",
+		ClientMsgID:    "c-nil",
+	})
+	if err != nil {
+		t.Fatalf("SendChat error: %v", err)
+	}
+	if !created {
+		t.Fatalf("expected message to be created")
+	}
+}
+
 func TestSendChat_ValidatesMembershipAndInput(t *testing.T) {
 	now := time.Now()
 	messageRepo := memory.NewMessageRepository(nil)
