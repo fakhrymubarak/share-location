@@ -1,78 +1,98 @@
 package logging
 
 import (
-	"fmt"
-	"log"
+	"io"
 	"os"
 	"strings"
-	"sync/atomic"
+
+	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 )
 
-// Logger provides leveled logging with optional JSON output.
+// Logger wraps logrus with a narrowed interface for the app.
 type Logger struct {
-	level int32
-	json  bool
-	std   *log.Logger
+	entry   *logrus.Entry
+	enabled bool
 }
 
-const (
-	levelDebug = iota
-	levelInfo
-	levelWarn
-	levelError
-)
-
-// New creates a leveled logger. Level accepts debug, info, warn, error.
+// New creates a Logger with the given level and formatter.
 func New(level string, json bool) *Logger {
-	l := &Logger{
-		level: parseLevel(level),
-		json:  json,
-		std:   log.New(os.Stdout, "", log.LstdFlags),
+	base := logrus.New()
+	base.SetLevel(parseLevel(level))
+	if json {
+		base.SetFormatter(&logrus.JSONFormatter{})
 	}
-	return l
+	base.SetOutput(os.Stdout)
+	return &Logger{entry: logrus.NewEntry(base), enabled: true}
 }
 
-// Nop returns a logger that drops all logs.
+// Nop returns a logger that discards output.
 func Nop() *Logger {
-	return &Logger{
-		level: levelError + 1,
-		std:   log.New(os.Stdout, "", 0),
+	base := logrus.New()
+	base.SetOutput(io.Discard)
+	return &Logger{entry: logrus.NewEntry(base), enabled: false}
+}
+
+// WithFields returns a derived logger with structured fields.
+func (l *Logger) WithFields(fields logrus.Fields) *Logger {
+	if l == nil {
+		return l
 	}
+	return &Logger{entry: l.entry.WithFields(fields), enabled: l.enabled}
+}
+
+// WithUser adds a user_id field when available.
+func (l *Logger) WithUser(id uuid.UUID) *Logger {
+	if id == uuid.Nil {
+		return l
+	}
+	return l.WithFields(logrus.Fields{"user_id": id.String()})
 }
 
 func (l *Logger) SetLevel(level string) {
-	atomic.StoreInt32(&l.level, parseLevel(level))
-}
-
-func (l *Logger) Debugf(format string, args ...any) { l.logf(levelDebug, "debug", format, args...) }
-func (l *Logger) Infof(format string, args ...any)  { l.logf(levelInfo, "info", format, args...) }
-func (l *Logger) Warnf(format string, args ...any)  { l.logf(levelWarn, "warn", format, args...) }
-func (l *Logger) Errorf(format string, args ...any) { l.logf(levelError, "error", format, args...) }
-
-func (l *Logger) logf(lvl int, label, format string, args ...any) {
 	if l == nil {
 		return
 	}
-	if lvl < int(atomic.LoadInt32(&l.level)) {
-		return
-	}
-	msg := fmt.Sprintf(format, args...)
-	if l.json {
-		l.std.Printf(`{"level":"%s","msg":%q}`, label, msg)
-		return
-	}
-	l.std.Printf("[%s] %s", strings.ToUpper(label), msg)
+	l.entry.Logger.SetLevel(parseLevel(level))
 }
 
-func parseLevel(level string) int32 {
+func (l *Logger) SetOutput(w io.Writer) {
+	if l == nil {
+		return
+	}
+	l.entry.Logger.SetOutput(w)
+}
+
+func (l *Logger) Debugf(format string, args ...any) {
+	if l != nil && l.enabled {
+		l.entry.Debugf(format, args...)
+	}
+}
+func (l *Logger) Infof(format string, args ...any) {
+	if l != nil && l.enabled {
+		l.entry.Infof(format, args...)
+	}
+}
+func (l *Logger) Warnf(format string, args ...any) {
+	if l != nil && l.enabled {
+		l.entry.Warnf(format, args...)
+	}
+}
+func (l *Logger) Errorf(format string, args ...any) {
+	if l != nil && l.enabled {
+		l.entry.Errorf(format, args...)
+	}
+}
+
+func parseLevel(level string) logrus.Level {
 	switch strings.ToLower(strings.TrimSpace(level)) {
 	case "debug":
-		return levelDebug
+		return logrus.DebugLevel
 	case "warn", "warning":
-		return levelWarn
+		return logrus.WarnLevel
 	case "error":
-		return levelError
+		return logrus.ErrorLevel
 	default:
-		return levelInfo
+		return logrus.InfoLevel
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 
 	"github.com/fakhry/share-location/backend/internal/domain"
 	"github.com/fakhry/share-location/backend/internal/logging"
@@ -241,6 +242,7 @@ func wsHandler(users *service.UserService, messaging *service.MessagingService, 
 
 func wsHandlerWithDeps(deps Deps) func(*websocket.Conn) {
 	hub := deps.Hub
+	baseLog := deps.Logger.WithFields(logrus.Fields{"component": "ws"})
 	type envelope struct {
 		Event string          `json:"event"`
 		Data  json.RawMessage `json:"data"`
@@ -304,12 +306,13 @@ func wsHandlerWithDeps(deps Deps) func(*websocket.Conn) {
 		}
 		user, err := deps.Users.Handshake(context.Background(), username)
 		if err != nil {
-			deps.Logger.Warnf("handshake failed for username=%s: %v", username, err)
+			baseLog.WithFields(logrus.Fields{"event": "ws_handshake"}).Warnf("handshake failed for username=%s: %v", username, err)
 			_ = c.WriteMessage(websocket.TextMessage, []byte(`{"event":"ERROR","data":{"code":"invalid_username"}}`))
 			_ = c.Close()
 			return
 		}
 
+		userLog := baseLog.WithUser(user.ID)
 		connID := hub.add(user.ID, c)
 		c.SetPongHandler(func(string) error {
 			hub.heartbeat(user.ID, connID)
@@ -321,17 +324,17 @@ func wsHandlerWithDeps(deps Deps) func(*websocket.Conn) {
 		resp.Data.Username = user.Username
 		payload, _ := json.Marshal(resp)
 		_ = c.WriteMessage(websocket.TextMessage, payload)
-		deps.Logger.Infof("websocket connected user=%s conn_id=%s", user.ID, connID)
+		userLog.WithFields(logrus.Fields{"event": "ws_connected", "conn_id": connID}).Infof("connected username=%s", username)
 
 		for {
 			_, msg, err := c.ReadMessage()
 			if err != nil {
-				deps.Logger.Debugf("websocket read error user=%s: %v", user.ID, err)
+				userLog.WithFields(logrus.Fields{"event": "ws_read"}).Debugf("read error: %v", err)
 				return
 			}
 			var env envelope
 			if err := json.Unmarshal(msg, &env); err != nil {
-				deps.Logger.Warnf("websocket unmarshal error user=%s: %v", user.ID, err)
+				userLog.WithFields(logrus.Fields{"event": "ws_unmarshal"}).Warnf("unmarshal error: %v", err)
 				continue
 			}
 			switch env.Event {
@@ -339,13 +342,13 @@ func wsHandlerWithDeps(deps Deps) func(*websocket.Conn) {
 				var req sendChat
 				if err := json.Unmarshal(env.Data, &req); err != nil {
 					sendError(c, env.ReqID, "invalid_payload", "bad send_chat payload")
-					deps.Logger.Warnf("invalid send_chat payload user=%s: %v", user.ID, err)
+					userLog.WithFields(logrus.Fields{"event": "send_chat"}).Warnf("invalid payload: %v", err)
 					continue
 				}
 				convID, err := uuid.Parse(req.ConversationID)
 				if err != nil {
 					sendError(c, env.ReqID, "invalid_conversation", "invalid conversation_id")
-					deps.Logger.Warnf("invalid conversation id user=%s: %v", user.ID, err)
+					userLog.WithFields(logrus.Fields{"event": "send_chat", "conversation_id": req.ConversationID}).Warnf("invalid conversation id: %v", err)
 					continue
 				}
 				msgRes, _, err := deps.Messaging.SendChat(context.Background(), service.SendChatRequest{
@@ -357,7 +360,7 @@ func wsHandlerWithDeps(deps Deps) func(*websocket.Conn) {
 				})
 				if err != nil {
 					sendError(c, env.ReqID, errorCode(err), err.Error())
-					deps.Logger.Warnf("send_chat failed user=%s conv=%s: %v", user.ID, convID, err)
+					userLog.WithFields(logrus.Fields{"event": "send_chat", "conversation_id": convID}).Warnf("send_chat failed: %v", err)
 					continue
 				}
 				out := receiveChat{Event: "RECEIVE_CHAT", ReqID: env.ReqID}
@@ -376,7 +379,7 @@ func wsHandlerWithDeps(deps Deps) func(*websocket.Conn) {
 					broadcastBytes, _ := json.Marshal(broadcast)
 					go hub.BroadcastToConversation(context.Background(), deps.Conversations, msgRes.ConversationID, connID, broadcastBytes)
 				}
-				deps.Logger.Debugf("send_chat ok user=%s conv=%s msg=%s", user.ID, convID, msgRes.ID)
+				userLog.WithFields(logrus.Fields{"event": "send_chat", "conversation_id": convID, "message_id": msgRes.ID}).Debugf("send_chat ok")
 			case "PUBLISH_LIVE_LOCATION":
 				if deps.LiveLocation == nil {
 					continue
@@ -384,13 +387,13 @@ func wsHandlerWithDeps(deps Deps) func(*websocket.Conn) {
 				var req publishLive
 				if err := json.Unmarshal(env.Data, &req); err != nil {
 					sendError(c, env.ReqID, "invalid_payload", "bad live payload")
-					deps.Logger.Warnf("invalid live payload user=%s: %v", user.ID, err)
+					userLog.WithFields(logrus.Fields{"event": "publish_live"}).Warnf("invalid payload: %v", err)
 					continue
 				}
 				streamID, err := uuid.Parse(req.StreamID)
 				if err != nil {
 					sendError(c, env.ReqID, "invalid_stream", "invalid stream_id")
-					deps.Logger.Warnf("invalid stream id user=%s: %v", user.ID, err)
+					userLog.WithFields(logrus.Fields{"event": "publish_live", "stream_id": req.StreamID}).Warnf("invalid stream id: %v", err)
 					continue
 				}
 				var convID uuid.UUID
@@ -398,7 +401,7 @@ func wsHandlerWithDeps(deps Deps) func(*websocket.Conn) {
 					convID, err = uuid.Parse(req.ConversationID)
 					if err != nil {
 						sendError(c, env.ReqID, "invalid_conversation", "invalid conversation_id")
-						deps.Logger.Warnf("invalid live conversation id user=%s: %v", user.ID, err)
+						userLog.WithFields(logrus.Fields{"event": "publish_live", "conversation_id": req.ConversationID}).Warnf("invalid conversation id: %v", err)
 						continue
 					}
 				}
@@ -419,7 +422,7 @@ func wsHandlerWithDeps(deps Deps) func(*websocket.Conn) {
 				})
 				if err != nil {
 					sendError(c, env.ReqID, errorCode(err), err.Error())
-					deps.Logger.Warnf("publish live failed user=%s stream=%s: %v", user.ID, streamID, err)
+					userLog.WithFields(logrus.Fields{"event": "publish_live", "stream_id": streamID}).Warnf("publish failed: %v", err)
 					continue
 				}
 				out := liveUpdate{Event: "SUBSCRIBE_LIVE_LOCATION", ReqID: env.ReqID}
@@ -441,7 +444,7 @@ func wsHandlerWithDeps(deps Deps) func(*websocket.Conn) {
 					broadcastBytes, _ := json.Marshal(broadcast)
 					go hub.BroadcastToConversation(context.Background(), deps.Conversations, point.ConversationID, connID, broadcastBytes)
 				}
-				deps.Logger.Debugf("publish live ok user=%s stream=%s", user.ID, streamID)
+				userLog.WithFields(logrus.Fields{"event": "publish_live", "stream_id": streamID}).Debugf("publish live ok")
 			case "SUBSCRIBE_LIVE_LOCATION":
 				if deps.LiveLocation == nil {
 					continue
@@ -449,19 +452,19 @@ func wsHandlerWithDeps(deps Deps) func(*websocket.Conn) {
 				var req subscribeLive
 				if err := json.Unmarshal(env.Data, &req); err != nil {
 					sendError(c, env.ReqID, "invalid_payload", "bad subscribe payload")
-					deps.Logger.Warnf("invalid subscribe payload user=%s: %v", user.ID, err)
+					userLog.WithFields(logrus.Fields{"event": "subscribe_live"}).Warnf("invalid payload: %v", err)
 					continue
 				}
 				streamID, err := uuid.Parse(req.StreamID)
 				if err != nil {
 					sendError(c, env.ReqID, "invalid_stream", "invalid stream_id")
-					deps.Logger.Warnf("invalid subscribe stream id user=%s: %v", user.ID, err)
+					userLog.WithFields(logrus.Fields{"event": "subscribe_live", "stream_id": req.StreamID}).Warnf("invalid stream id: %v", err)
 					continue
 				}
 				point, err := deps.LiveLocation.Sessions.GetPoint(context.Background(), streamID)
 				if err != nil {
 					sendError(c, env.ReqID, errorCode(err), err.Error())
-					deps.Logger.Warnf("subscribe stream not found user=%s stream=%s: %v", user.ID, streamID, err)
+					userLog.WithFields(logrus.Fields{"event": "subscribe_live", "stream_id": streamID}).Warnf("stream not found: %v", err)
 					continue
 				}
 				out := liveUpdate{Event: "SUBSCRIBE_LIVE_LOCATION", ReqID: env.ReqID}

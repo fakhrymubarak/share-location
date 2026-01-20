@@ -10,6 +10,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+	"github.com/sirupsen/logrus"
 
 	"github.com/fakhry/share-location/backend/internal/config"
 	dbpg "github.com/fakhry/share-location/backend/internal/db/pg"
@@ -31,7 +32,7 @@ func main() {
 	app, port := buildApp(cfg, logger)
 
 	addr := ":" + strconv.Itoa(port)
-	logger.Infof("starting server on %s", addr)
+	logger.WithFields(logrus.Fields{"event": "server_start"}).Infof("starting server on %s", addr)
 	if err := app.Listen(addr); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
@@ -138,15 +139,11 @@ func redisClient(url string, logger *logging.Logger) *redis.Client {
 	}
 	opts, err := redis.ParseURL(url)
 	if err != nil {
-		if logger != nil {
-			logger.Warnf("failed to parse redis url: %v", err)
-		}
+		logger.WithFields(logrus.Fields{"event": "redis_connect"}).Warnf("failed to parse redis url: %v", err)
 		return nil
 	}
 	client := redis.NewClient(opts)
-	if logger != nil {
-		logger.Infof("connected to redis: %s", opts.Addr)
-	}
+	logger.WithFields(logrus.Fields{"event": "redis_connect"}).Infof("connected to redis: %s", opts.Addr)
 	return client
 }
 
@@ -156,9 +153,7 @@ func postgresPool(cfg *config.Config, logger *logging.Logger) *pgxpool.Pool {
 	}
 	poolCfg, err := pgxpool.ParseConfig(cfg.Database.URL)
 	if err != nil {
-		if logger != nil {
-			logger.Warnf("failed to parse database url: %v", err)
-		}
+		logger.WithFields(logrus.Fields{"event": "postgres_connect"}).Warnf("failed to parse database url: %v", err)
 		return nil
 	}
 	if cfg.Database.MaxOpenConns > 0 {
@@ -175,13 +170,9 @@ func postgresPool(cfg *config.Config, logger *logging.Logger) *pgxpool.Pool {
 	defer cancel()
 	pool, err := pgxPoolFactory(ctx, poolCfg)
 	if err != nil {
-		if logger != nil {
-			logger.Warnf("failed to connect to postgres: %v", err)
-		}
+		logger.WithFields(logrus.Fields{"event": "postgres_connect"}).Warnf("failed to connect to postgres: %v", err)
 		return nil
 	}
-	if logger != nil {
-		logger.Infof("connected to postgres")
-	}
+	logger.WithFields(logrus.Fields{"event": "postgres_connect"}).Infof("connected to postgres")
 	return pool
 }
