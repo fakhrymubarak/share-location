@@ -70,3 +70,4 @@ Live location publish/subscribe over WebSocket with ephemeral storage in Redis. 
 
 ## Decisions
 - Subscriptions remain explicit to a conversation or stream id; no auto-subscribe by `user_id` presence in v1 to avoid noisy fan-out.
+- One active session per user per conversation (and one global session per user if `conversation_id` is omitted), aligned with DB partial unique constraints; renew by ending and recreating.

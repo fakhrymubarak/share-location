@@ -39,7 +39,7 @@ Conversation creation and membership management using username inputs. Supports 
 
 ## Error handling
 - Validation for missing usernames/type; reject excessively large participant lists.
-- Handle duplicate membership inserts gracefully; direct-conversation uniqueness enforcement is optional.
+- Handle duplicate membership inserts gracefully; direct-conversation uniqueness is enforced (return existing conversation on duplicate pair).
 - Surface DB errors with request id; partial failure should rollback the transaction.
 
 ## Performance considerations
