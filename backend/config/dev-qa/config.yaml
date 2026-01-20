@@ -1,0 +1,15 @@
+app:
+  env: dev-qa
+server:
+  port: 8080
+database:
+  url: postgres://chatapp:chatapp@db:5432/chatapp?sslmode=disable
+  max_open_conns: 25
+  max_idle_conns: 5
+  conn_max_lifetime_minutes: 30
+redis:
+  url: redis://redis:6379/0
+  connection_pool_size: 30
+logging:
+  level: debug
+  json: false

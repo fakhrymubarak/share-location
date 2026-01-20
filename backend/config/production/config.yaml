@@ -1,0 +1,22 @@
+app:
+  env: production
+server:
+  port: 8080
+database:
+  url: postgres://chatapp:${DB_PASSWORD:-chatapp}@db:5432/chatapp?sslmode=require
+  max_open_conns: 50
+  max_idle_conns: 10
+  conn_max_lifetime_minutes: 30
+redis:
+  url: rediss://redis:6379/0
+  connection_pool_size: 50
+logging:
+  level: info
+  json: true
+messages:
+  max_payload_bytes: 16384
+  max_inflight_per_connection: 20
+live_location:
+  max_ttl_seconds: 900
+  strict_ttl: true
+  publish_rate_per_minute: 120

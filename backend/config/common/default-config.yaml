@@ -1,0 +1,27 @@
+app:
+  env: local
+  name: share-location-backend
+server:
+  port: 8080
+  max_request_body_bytes: 1048576
+  websocket:
+    heartbeat_interval_seconds: 30
+    idle_timeout_seconds: 60
+database:
+  url: ""
+  max_open_conns: 20
+  max_idle_conns: 5
+  conn_max_lifetime_minutes: 30
+redis:
+  url: ""
+  connection_pool_size: 20
+messages:
+  max_payload_bytes: 16384
+  max_inflight_per_connection: 20
+live_location:
+  max_ttl_seconds: 900
+  strict_ttl: false
+  publish_rate_per_minute: 120
+logging:
+  level: info
+  json: false
