@@ -13,6 +13,7 @@ import (
 
 	"github.com/fakhry/share-location/backend/internal/domain"
 	"github.com/fakhry/share-location/backend/internal/service"
+	"github.com/fakhry/share-location/backend/internal/ws/registry"
 )
 
 // Deps aggregates services used by the HTTP/WebSocket layer.
@@ -21,6 +22,7 @@ type Deps struct {
 	Conversations *service.ConversationService
 	Messaging     *service.MessagingService
 	LiveLocation  *service.LiveLocationService
+	Connections   *registry.Registry
 }
 
 func New(deps Deps) *fiber.App {
@@ -35,7 +37,7 @@ func New(deps Deps) *fiber.App {
 	app.Post("/v1/messages/:id/receipt", receiptHandler(deps.Messaging))
 	app.Post("/v1/live-locations", startLiveLocationHandler(deps.LiveLocation))
 
-	app.Use("/ws", websocket.New(wsHandler(deps.Users, deps.Messaging, deps.LiveLocation)))
+	app.Use("/ws", websocket.New(wsHandlerWithDeps(deps)))
 
 	return app
 }
@@ -219,6 +221,14 @@ func startLiveLocationHandler(live *service.LiveLocationService) fiber.Handler {
 }
 
 func wsHandler(users *service.UserService, messaging *service.MessagingService, live *service.LiveLocationService) func(*websocket.Conn) {
+	return wsHandlerWithDeps(Deps{
+		Users:        users,
+		Messaging:    messaging,
+		LiveLocation: live,
+	})
+}
+
+func wsHandlerWithDeps(deps Deps) func(*websocket.Conn) {
 	type envelope struct {
 		Event string          `json:"event"`
 		Data  json.RawMessage `json:"data"`
@@ -280,11 +290,22 @@ func wsHandler(users *service.UserService, messaging *service.MessagingService, 
 		if username == "" {
 			username = c.Headers("X-Username")
 		}
-		user, err := users.Handshake(context.Background(), username)
+		user, err := deps.Users.Handshake(context.Background(), username)
 		if err != nil {
 			_ = c.WriteMessage(websocket.TextMessage, []byte(`{"event":"ERROR","data":{"code":"invalid_username"}}`))
 			_ = c.Close()
 			return
+		}
+
+		var connID string
+		if deps.Connections != nil {
+			connID = uuid.NewString()
+			deps.Connections.Add(user.ID, connID)
+			c.SetPongHandler(func(string) error {
+				deps.Connections.Heartbeat(user.ID, connID)
+				return nil
+			})
+			defer deps.Connections.Remove(user.ID, connID)
 		}
 		resp := connected{Event: "CONNECTED"}
 		resp.Data.UserID = user.ID.String()
@@ -313,7 +334,7 @@ func wsHandler(users *service.UserService, messaging *service.MessagingService, 
 					sendError(c, env.ReqID, "invalid_conversation", "invalid conversation_id")
 					continue
 				}
-				msgRes, _, err := messaging.SendChat(context.Background(), service.SendChatRequest{
+				msgRes, _, err := deps.Messaging.SendChat(context.Background(), service.SendChatRequest{
 					ConversationID: convID,
 					SenderID:       user.ID,
 					Body:           req.Body,
@@ -335,7 +356,7 @@ func wsHandler(users *service.UserService, messaging *service.MessagingService, 
 				respBytes, _ := json.Marshal(out)
 				_ = c.WriteMessage(websocket.TextMessage, respBytes)
 			case "PUBLISH_LIVE_LOCATION":
-				if live == nil {
+				if deps.LiveLocation == nil {
 					continue
 				}
 				var req publishLive
@@ -360,7 +381,7 @@ func wsHandler(users *service.UserService, messaging *service.MessagingService, 
 				if req.ExpiresAt != "" {
 					expires, _ = time.Parse(time.RFC3339, req.ExpiresAt)
 				}
-				point, err := live.PublishLocation(context.Background(), service.PublishLocationRequest{
+				point, err := deps.LiveLocation.PublishLocation(context.Background(), service.PublishLocationRequest{
 					StreamID:       streamID,
 					UserID:         user.ID,
 					ConversationID: convID,
@@ -389,7 +410,7 @@ func wsHandler(users *service.UserService, messaging *service.MessagingService, 
 				respBytes, _ := json.Marshal(out)
 				_ = c.WriteMessage(websocket.TextMessage, respBytes)
 			case "SUBSCRIBE_LIVE_LOCATION":
-				if live == nil {
+				if deps.LiveLocation == nil {
 					continue
 				}
 				var req subscribeLive
@@ -402,7 +423,7 @@ func wsHandler(users *service.UserService, messaging *service.MessagingService, 
 					sendError(c, env.ReqID, "invalid_stream", "invalid stream_id")
 					continue
 				}
-				point, err := live.Sessions.GetPoint(context.Background(), streamID)
+				point, err := deps.LiveLocation.Sessions.GetPoint(context.Background(), streamID)
 				if err != nil {
 					sendError(c, env.ReqID, errorCode(err), err.Error())
 					continue
