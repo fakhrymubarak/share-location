@@ -411,4 +411,27 @@ func TestWebSocketPublishLiveLocation(t *testing.T) {
 	if resp["event"] != "SUBSCRIBE_LIVE_LOCATION" || resp["req_id"] != "r2" {
 		t.Fatalf("unexpected response %+v", resp)
 	}
+
+	// Subscribe to get cached point.
+	req = map[string]any{
+		"event":  "SUBSCRIBE_LIVE_LOCATION",
+		"req_id": "r3",
+		"data": map[string]any{
+			"stream_id": session.ID.String(),
+		},
+	}
+	reqBytes, _ = json.Marshal(req)
+	if err := conn.WriteMessage(websocket.TextMessage, reqBytes); err != nil {
+		t.Fatalf("write subscribe error: %v", err)
+	}
+	_, data, err = conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("read message error: %v", err)
+	}
+	if err := json.Unmarshal(data, &resp); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+	if resp["event"] != "SUBSCRIBE_LIVE_LOCATION" || resp["req_id"] != "r3" {
+		t.Fatalf("unexpected subscribe response %+v", resp)
+	}
 }

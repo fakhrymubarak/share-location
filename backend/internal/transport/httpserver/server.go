@@ -260,16 +260,20 @@ func wsHandler(users *service.UserService, messaging *service.MessagingService, 
 		Heading        float64 `json:"heading"`
 		ExpiresAt      string  `json:"expires_at"`
 	}
-	type liveUpdate struct {
-		Event string `json:"event"`
-		Data  struct {
-			StreamID       string         `json:"stream_id"`
-			ConversationID string         `json:"conversation_id"`
-			Point          map[string]any `json:"point"`
-			UpdatedAt      string         `json:"updated_at"`
-		} `json:"data"`
-		ReqID string `json:"req_id,omitempty"`
-	}
+type liveUpdate struct {
+	Event string `json:"event"`
+	Data  struct {
+		StreamID       string         `json:"stream_id"`
+		ConversationID string         `json:"conversation_id"`
+		Point          map[string]any `json:"point"`
+		UpdatedAt      string         `json:"updated_at"`
+	} `json:"data"`
+	ReqID string `json:"req_id,omitempty"`
+}
+type subscribeLive struct {
+	StreamID       string `json:"stream_id"`
+	ConversationID string `json:"conversation_id"`
+}
 	return func(c *websocket.Conn) {
 		username := c.Query("username")
 		if username == "" {
@@ -360,6 +364,35 @@ func wsHandler(users *service.UserService, messaging *service.MessagingService, 
 					Heading:        req.Heading,
 					ExpiresAt:      expires,
 				})
+				if err != nil {
+					continue
+				}
+				out := liveUpdate{Event: "SUBSCRIBE_LIVE_LOCATION", ReqID: env.ReqID}
+				out.Data.StreamID = point.StreamID.String()
+				out.Data.ConversationID = point.ConversationID.String()
+				out.Data.Point = map[string]any{
+					"lat":      point.Lat,
+					"lng":      point.Lng,
+					"accuracy": point.Accuracy,
+					"speed":    point.Speed,
+					"heading":  point.Heading,
+				}
+				out.Data.UpdatedAt = point.UpdatedAt.Format(time.RFC3339)
+				respBytes, _ := json.Marshal(out)
+				_ = c.WriteMessage(websocket.TextMessage, respBytes)
+			case "SUBSCRIBE_LIVE_LOCATION":
+				if live == nil {
+					continue
+				}
+				var req subscribeLive
+				if err := json.Unmarshal(env.Data, &req); err != nil {
+					continue
+				}
+				streamID, err := uuid.Parse(req.StreamID)
+				if err != nil {
+					continue
+				}
+				point, err := live.Sessions.GetPoint(context.Background(), streamID)
 				if err != nil {
 					continue
 				}
