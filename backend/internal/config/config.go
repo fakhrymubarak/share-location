@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -104,5 +105,11 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv("REDIS_URL"); v != "" {
 		cfg.Redis.URL = v
+	}
+	if v := os.Getenv("LOG_LEVEL"); v != "" {
+		cfg.Logging.Level = v
+	}
+	if v := os.Getenv("LOG_JSON"); strings.EqualFold(v, "true") {
+		cfg.Logging.JSON = true
 	}
 }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/fakhry/share-location/backend/internal/config"
 	dbpg "github.com/fakhry/share-location/backend/internal/db/pg"
+	"github.com/fakhry/share-location/backend/internal/logging"
 	pubredis "github.com/fakhry/share-location/backend/internal/pubsub/redis"
 	"github.com/fakhry/share-location/backend/internal/repo"
 	"github.com/fakhry/share-location/backend/internal/repo/memory"
@@ -26,10 +27,11 @@ var pgxPoolFactory = pgxpool.NewWithConfig
 
 func main() {
 	cfg := mustLoadConfig()
-	app, port := buildApp(cfg)
+	logger := logging.New(cfg.Logging.Level, cfg.Logging.JSON)
+	app, port := buildApp(cfg, logger)
 
 	addr := ":" + strconv.Itoa(port)
-	log.Printf("starting server on %s", addr)
+	logger.Infof("starting server on %s", addr)
 	if err := app.Listen(addr); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
@@ -52,14 +54,15 @@ func defaultConfig() *config.Config {
 	cfg.LiveLocation.MaxTTLSeconds = 900
 	cfg.Server.Websocket.HeartbeatIntervalSeconds = 30
 	cfg.Server.Websocket.IdleTimeoutSeconds = 60
+	cfg.Logging.Level = "info"
 	return cfg
 }
 
 // buildApp wires dependencies using in-memory repositories. Returns the Fiber app and port.
-func buildApp(cfg *config.Config) (*fiber.App, int) {
+func buildApp(cfg *config.Config, logger *logging.Logger) (*fiber.App, int) {
 	_ = dbpg.DB{} // placeholder wiring hook for future Postgres impls
-	pgPool := postgresPool(cfg)
-	redisCli := redisClient(cfg.Redis.URL)
+	pgPool := postgresPool(cfg, logger)
+	redisCli := redisClient(cfg.Redis.URL, logger)
 
 	usersRepo := repo.UserRepository(memory.NewUserRepository(nil))
 	convsRepo := repo.ConversationRepository(memory.NewConversationRepository(nil))
@@ -107,11 +110,12 @@ func buildApp(cfg *config.Config) (*fiber.App, int) {
 		Connections:   connRegistry,
 		Hub:           hub,
 		RedisFanout:   useRedisFanout,
+		Logger:        logger,
 	})
 
 	if useRedisFanout && redisCli != nil {
 		ctx := context.Background()
-		startRedisFanout(ctx, redisCli, hub, convSvc)
+		startRedisFanout(ctx, redisCli, hub, convSvc, logger)
 	}
 
 	port := cfg.Server.Port
@@ -128,24 +132,33 @@ func seconds(n int) time.Duration {
 	return time.Duration(n) * time.Second
 }
 
-func redisClient(url string) *redis.Client {
+func redisClient(url string, logger *logging.Logger) *redis.Client {
 	if url == "" {
 		return nil
 	}
 	opts, err := redis.ParseURL(url)
 	if err != nil {
+		if logger != nil {
+			logger.Warnf("failed to parse redis url: %v", err)
+		}
 		return nil
 	}
-	return redis.NewClient(opts)
+	client := redis.NewClient(opts)
+	if logger != nil {
+		logger.Infof("connected to redis: %s", opts.Addr)
+	}
+	return client
 }
 
-func postgresPool(cfg *config.Config) *pgxpool.Pool {
+func postgresPool(cfg *config.Config, logger *logging.Logger) *pgxpool.Pool {
 	if cfg.Database.URL == "" {
 		return nil
 	}
 	poolCfg, err := pgxpool.ParseConfig(cfg.Database.URL)
 	if err != nil {
-		log.Printf("warning: failed to parse database url: %v", err)
+		if logger != nil {
+			logger.Warnf("failed to parse database url: %v", err)
+		}
 		return nil
 	}
 	if cfg.Database.MaxOpenConns > 0 {
@@ -162,8 +175,13 @@ func postgresPool(cfg *config.Config) *pgxpool.Pool {
 	defer cancel()
 	pool, err := pgxPoolFactory(ctx, poolCfg)
 	if err != nil {
-		log.Printf("warning: failed to connect to postgres: %v", err)
+		if logger != nil {
+			logger.Warnf("failed to connect to postgres: %v", err)
+		}
 		return nil
+	}
+	if logger != nil {
+		logger.Infof("connected to postgres")
 	}
 	return pool
 }

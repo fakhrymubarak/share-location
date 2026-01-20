@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"net"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"errors"
+	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
@@ -481,6 +483,21 @@ func TestWebSocketSendChatInvalidConversation(t *testing.T) {
 	_ = json.Unmarshal(data, &resp)
 	if resp["event"] != "ERROR" || resp["req_id"] != "bad1" {
 		t.Fatalf("expected error response, got %+v", resp)
+	}
+}
+
+func TestErrorHandlerForbidden(t *testing.T) {
+	app := fiber.New(fiber.Config{ErrorHandler: errorHandler})
+	app.Get("/forbidden", func(c *fiber.Ctx) error {
+		return domain.ErrForbidden
+	})
+	req := httptest.NewRequest("GET", "/forbidden", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp.StatusCode)
 	}
 }
 

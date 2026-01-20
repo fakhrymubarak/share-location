@@ -11,6 +11,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/fakhry/share-location/backend/internal/domain"
+	"github.com/fakhry/share-location/backend/internal/logging"
 	"github.com/fakhry/share-location/backend/internal/repo/memory"
 	"github.com/fakhry/share-location/backend/internal/service"
 )
@@ -39,7 +40,7 @@ func TestStartRedisFanoutBroadcastsChat(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	startRedisFanout(ctx, client, hub, convSvc)
+	startRedisFanout(ctx, client, hub, convSvc, logging.Nop())
 	time.Sleep(50 * time.Millisecond)
 
 	msg := domain.Message{
@@ -77,7 +78,7 @@ func TestStartRedisFanoutBroadcastsLive(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	startRedisFanout(ctx, client, hub, convSvc)
+	startRedisFanout(ctx, client, hub, convSvc, logging.Nop())
 	time.Sleep(50 * time.Millisecond)
 
 	point := domain.LiveLocationPoint{

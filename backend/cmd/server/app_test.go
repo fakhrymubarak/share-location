@@ -6,11 +6,13 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/fakhry/share-location/backend/internal/logging"
 )
 
 func TestDefaultConfigAndBuildApp(t *testing.T) {
 	cfg := defaultConfig()
-	app, port := buildApp(cfg)
+	app, port := buildApp(cfg, logging.Nop())
 	if app == nil {
 		t.Fatalf("expected app instance")
 	}
@@ -22,7 +24,7 @@ func TestDefaultConfigAndBuildApp(t *testing.T) {
 func TestBuildAppRespectsPort(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.Server.Port = 9090
-	app, port := buildApp(cfg)
+	app, port := buildApp(cfg, logging.Nop())
 	if app == nil {
 		t.Fatalf("expected app instance")
 	}
@@ -52,13 +54,13 @@ func TestMustLoadConfigFallback(t *testing.T) {
 }
 
 func TestRedisClientParseError(t *testing.T) {
-	if client := redisClient("://bad"); client != nil {
+	if client := redisClient("://bad", logging.Nop()); client != nil {
 		t.Fatalf("expected nil client on bad URL")
 	}
 }
 
 func TestRedisClientParseSuccess(t *testing.T) {
-	client := redisClient("redis://localhost:6379/0")
+	client := redisClient("redis://localhost:6379/0", logging.Nop())
 	if client == nil {
 		t.Fatalf("expected client")
 	}
@@ -68,7 +70,7 @@ func TestRedisClientParseSuccess(t *testing.T) {
 func TestPostgresPoolParseError(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.Database.URL = "://bad"
-	if pool := postgresPool(cfg); pool != nil {
+	if pool := postgresPool(cfg, logging.Nop()); pool != nil {
 		t.Fatalf("expected nil pool on parse error")
 	}
 }
@@ -85,7 +87,7 @@ func TestPostgresPoolWithStubbedFactory(t *testing.T) {
 		return &pgxpool.Pool{}, nil
 	}
 
-	if pool := postgresPool(cfg); pool == nil {
+	if pool := postgresPool(cfg, logging.Nop()); pool == nil {
 		t.Fatalf("expected pool from stub factory")
 	}
 	if !called {
@@ -104,7 +106,7 @@ func TestBuildAppWithPostgresAndRedis(t *testing.T) {
 		return &pgxpool.Pool{}, nil
 	}
 
-	app, port := buildApp(cfg)
+	app, port := buildApp(cfg, logging.Nop())
 	if app == nil {
 		t.Fatalf("expected app instance")
 	}
@@ -129,7 +131,7 @@ func TestPostgresPoolAppliesLimits(t *testing.T) {
 		return &pgxpool.Pool{}, nil
 	}
 
-	if pool := postgresPool(cfg); pool == nil {
+	if pool := postgresPool(cfg, logging.Nop()); pool == nil {
 		t.Fatalf("expected pool")
 	}
 	if seenCfg == nil {

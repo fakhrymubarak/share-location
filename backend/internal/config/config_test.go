@@ -123,6 +123,29 @@ logging:
 	}
 }
 
+func TestApplyEnvOverridesForLogging(t *testing.T) {
+	tmp := t.TempDir()
+	common := `
+logging:
+  level: info
+  json: false
+`
+	write(t, filepath.Join(tmp, "common"), "default-config.yaml", common)
+	cfg, err := LoadFromDir(tmp, "")
+	if err != nil {
+		t.Fatalf("LoadFromDir error: %v", err)
+	}
+	t.Setenv("LOG_LEVEL", "debug")
+	t.Setenv("LOG_JSON", "true")
+	applyEnvOverrides(cfg)
+	if cfg.Logging.Level != "debug" {
+		t.Fatalf("expected LOG_LEVEL override, got %s", cfg.Logging.Level)
+	}
+	if !cfg.Logging.JSON {
+		t.Fatalf("expected LOG_JSON override to true")
+	}
+}
+
 func write(t *testing.T, dir, name, content string) {
 	t.Helper()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
