@@ -31,6 +31,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    # API uses Postgres + Redis; configure logs/ports via envs below.
     environment:
       APP_ENV: local
       DB_URL: postgres://chatapp:chatapp@db:5432/chatapp?sslmode=disable
@@ -38,6 +39,8 @@ services:
       WS_HEARTBEAT_INTERVAL_SECONDS: 30
       WS_IDLE_TIMEOUT_SECONDS: 60
       LIVE_LOCATION_MAX_TTL_SECONDS: 900
+      LOG_LEVEL: info
+      LOG_JSON: "false"
     depends_on:
       db:
         condition: service_healthy
