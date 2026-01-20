@@ -132,6 +132,16 @@ func TestLoginAndConversationEndpoints(t *testing.T) {
 	if resp.StatusCode != 200 {
 		t.Fatalf("live location status = %d", resp.StatusCode)
 	}
+
+	// Health
+	req = httptest.NewRequest("GET", "/health", nil)
+	resp, err = app.Test(req)
+	if err != nil {
+		t.Fatalf("health request failed: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("health status = %d", resp.StatusCode)
+	}
 }
 
 func TestHandlers_ReturnValidationErrors(t *testing.T) {
@@ -169,6 +179,19 @@ func TestHandlers_ReturnValidationErrors(t *testing.T) {
 	resp, _ = app.Test(req)
 	if resp.StatusCode != 400 {
 		t.Fatalf("conversation status = %d, want 400", resp.StatusCode)
+	}
+
+	// Bad live-location payload.
+	llBody, _ := json.Marshal(map[string]any{
+		"user_id":         "not-a-uuid",
+		"conversation_id": "also-bad",
+		"ttl_seconds":     10,
+	})
+	req = httptest.NewRequest("POST", "/v1/live-locations", bytes.NewReader(llBody))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ = app.Test(req)
+	if resp.StatusCode != 400 {
+		t.Fatalf("live location status = %d, want 400", resp.StatusCode)
 	}
 }
 

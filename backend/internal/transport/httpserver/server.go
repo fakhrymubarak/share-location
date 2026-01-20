@@ -28,6 +28,7 @@ func New(deps Deps) *fiber.App {
 		ErrorHandler: errorHandler,
 	})
 
+	app.Get("/health", func(c *fiber.Ctx) error { return c.SendStatus(http.StatusOK) })
 	app.Post("/v1/login", loginHandler(deps.Users))
 	app.Post("/v1/conversations", createConversationHandler(deps.Conversations))
 	app.Get("/v1/conversations/:id/messages", listMessagesHandler(deps.Messaging))
@@ -428,6 +429,9 @@ func wsHandler(users *service.UserService, messaging *service.MessagingService, 
 
 func errorHandler(c *fiber.Ctx, err error) error {
 	var status = http.StatusInternalServerError
+	if fe, ok := err.(*fiber.Error); ok {
+		return c.Status(fe.Code).JSON(fiber.Map{"error": fe.Message})
+	}
 	switch {
 	case errors.Is(err, domain.ErrInvalidInput):
 		status = http.StatusBadRequest
