@@ -1,0 +1,263 @@
+openapi: 3.0.3
+info:
+  title: Share Location Backend API
+  version: "0.1.0"
+  description: >
+    HTTP and WebSocket APIs for login, conversations, messaging, delivery receipts, and live-location sessions.
+servers:
+  - url: http://localhost:8080
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: OK
+  /v1/login:
+    post:
+      summary: Idempotent login/handshake by username
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        "200":
+          description: User upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+  /v1/conversations:
+    post:
+      summary: Create conversation (direct or group)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConversationCreateRequest'
+      responses:
+        "200":
+          description: Conversation created (or existing direct returned)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationCreateResponse'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+  /v1/conversations/{id}/messages:
+    get:
+      summary: List messages in a conversation
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Messages ordered by created_at,id
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Message'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+  /v1/messages/{id}/receipt:
+    post:
+      summary: Upsert delivery/read receipt for a message
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReceiptRequest'
+      responses:
+        "204":
+          description: Receipt persisted
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+  /v1/live-locations:
+    post:
+      summary: Start a live-location session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LiveLocationStartRequest'
+      responses:
+        "200":
+          description: Session started (or renewed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveLocationStartResponse'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+  /ws:
+    get:
+      summary: WebSocket handshake
+      description: >
+        Upserts user by `username` query param, sends CONNECTED event, then supports SEND_CHAT,
+        PUBLISH_LIVE_LOCATION, and SUBSCRIBE_LIVE_LOCATION frames. See docs/features/*.md for event shapes.
+      parameters:
+        - in: query
+          name: username
+          required: true
+          schema:
+            type: string
+      responses:
+        "101":
+          description: Switching Protocols
+components:
+  schemas:
+    LoginRequest:
+      type: object
+      properties:
+        username:
+          type: string
+      required: [username]
+    LoginResponse:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        username:
+          type: string
+    ConversationCreateRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [direct, group]
+        title:
+          type: string
+        usernames:
+          type: array
+          items:
+            type: string
+      required: [type, usernames]
+    ConversationCreateResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+        title:
+          type: string
+        user_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        direct_pair_key:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        conversation_id:
+          type: string
+          format: uuid
+        sender_id:
+          type: string
+          format: uuid
+        message_type:
+          type: string
+          enum: [text, location, media]
+        client_msg_id:
+          type: string
+        body:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+    ReceiptRequest:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [delivered, read]
+      required: [user_id, status]
+    LiveLocationStartRequest:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        conversation_id:
+          type: string
+          format: uuid
+        ttl_seconds:
+          type: integer
+      required: [user_id]
+    LiveLocationStartResponse:
+      type: object
+      properties:
+        stream_id:
+          type: string
+          format: uuid
+        expires_at:
+          type: string
+          format: date-time
+        user_id:
+          type: string
+          format: uuid
+        conversation_id:
+          type: string
+          format: uuid
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+  responses:
+    BadRequest:
+      description: Invalid input
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: User is not allowed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
