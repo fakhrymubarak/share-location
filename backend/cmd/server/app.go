@@ -11,6 +11,8 @@ import (
 
 	"github.com/fakhry/share-location/backend/internal/config"
 	dbpg "github.com/fakhry/share-location/backend/internal/db/pg"
+	pubredis "github.com/fakhry/share-location/backend/internal/pubsub/redis"
+	"github.com/fakhry/share-location/backend/internal/repo"
 	"github.com/fakhry/share-location/backend/internal/repo/memory"
 	"github.com/fakhry/share-location/backend/internal/service"
 	"github.com/fakhry/share-location/backend/internal/transport/httpserver"
@@ -48,16 +50,22 @@ func defaultConfig() *config.Config {
 // buildApp wires dependencies using in-memory repositories. Returns the Fiber app and port.
 func buildApp(cfg *config.Config) (*fiber.App, int) {
 	_ = dbpg.DB{} // placeholder wiring hook for future Postgres impls
-	_ = redisClient(cfg.Redis.URL) // placeholder for future Redis impls
+	redisCli := redisClient(cfg.Redis.URL)
 
 	usersRepo := memory.NewUserRepository(nil)
 	convsRepo := memory.NewConversationRepository(nil)
 	membersRepo := memory.NewMembershipRepository(nil)
 	msgRepo := memory.NewMessageRepository(nil)
 	rcRepo := memory.NewReceiptRepository(nil)
-	liveRepo := memory.NewLiveLocationRepository(nil)
-	msgPublisher := memory.NewMessagePublisher()
-	livePublisher := memory.NewLiveLocationPublisher()
+	var liveRepo repo.LiveLocationRepository = memory.NewLiveLocationRepository(nil)
+	var msgPublisher repo.MessagePublisher = memory.NewMessagePublisher()
+	var livePublisher repo.LiveLocationPublisher = memory.NewLiveLocationPublisher()
+
+	if redisCli != nil {
+		liveRepo = pubredis.NewLiveLocationRepo(redisCli, seconds(cfg.LiveLocation.MaxTTLSeconds))
+		livePublisher = pubredis.NewLiveLocationPublisher(redisCli)
+		msgPublisher = pubredis.NewMessagePublisher(redisCli)
+	}
 
 	userSvc := service.NewUserService(usersRepo)
 	convSvc := service.NewConversationService(usersRepo, convsRepo, membersRepo, nil)
