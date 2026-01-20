@@ -2,12 +2,14 @@ package httpserver
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
 	"github.com/fakhry/share-location/backend/internal/repo/memory"
@@ -19,10 +21,15 @@ func TestLoginAndConversationEndpoints(t *testing.T) {
 	usersRepo := memory.NewUserRepository(func() time.Time { return now })
 	convRepo := memory.NewConversationRepository(func() time.Time { return now })
 	memberRepo := memory.NewMembershipRepository(func() time.Time { return now })
+	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
+	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
+	msgSvc := service.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now })
+	convSvc := service.NewConversationService(usersRepo, convRepo, memberRepo, func() time.Time { return now })
 
 	app := New(Deps{
 		Users:         service.NewUserService(usersRepo),
-		Conversations: service.NewConversationService(usersRepo, convRepo, memberRepo, func() time.Time { return now }),
+		Conversations: convSvc,
+		Messaging:     msgSvc,
 	})
 
 	loginBody, _ := json.Marshal(map[string]string{"username": "alice"})
@@ -59,6 +66,53 @@ func TestLoginAndConversationEndpoints(t *testing.T) {
 	if convResp["id"] == "" || convResp["type"] != "direct" {
 		t.Fatalf("unexpected conversation response %+v", convResp)
 	}
+
+	convID := convResp["id"].(string)
+	alice, _ := usersRepo.GetByUsername(context.Background(), "alice")
+	bob, _ := usersRepo.GetByUsername(context.Background(), "bob")
+
+	// Seed messages via service.
+	for _, cID := range []string{"c1", "c2"} {
+		_, _, err := msgSvc.SendChat(context.Background(), service.SendChatRequest{
+			ConversationID: uuid.MustParse(convID),
+			SenderID:       alice.ID,
+			Body:           map[string]any{"text": cID},
+			MessageType:    "text",
+			ClientMsgID:    cID,
+		})
+		if err != nil {
+			t.Fatalf("SendChat seed error: %v", err)
+		}
+	}
+
+	req = httptest.NewRequest("GET", "/v1/conversations/"+convID+"/messages?limit=10", nil)
+	resp, err = app.Test(req)
+	if err != nil {
+		t.Fatalf("list messages request failed: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("list messages status = %d", resp.StatusCode)
+	}
+	var msgs []map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&msgs)
+	if len(msgs) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(msgs))
+	}
+	firstMsgID, _ := msgs[0]["id"].(string)
+
+	rcBody, _ := json.Marshal(map[string]string{
+		"user_id": bob.ID.String(),
+		"status":  "read",
+	})
+	req = httptest.NewRequest("POST", "/v1/messages/"+firstMsgID+"/receipt", bytes.NewReader(rcBody))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = app.Test(req)
+	if err != nil {
+		t.Fatalf("receipt request failed: %v", err)
+	}
+	if resp.StatusCode != 204 {
+		t.Fatalf("receipt status = %d", resp.StatusCode)
+	}
 }
 
 func TestHandlers_ReturnValidationErrors(t *testing.T) {
@@ -66,10 +120,13 @@ func TestHandlers_ReturnValidationErrors(t *testing.T) {
 	usersRepo := memory.NewUserRepository(func() time.Time { return now })
 	convRepo := memory.NewConversationRepository(func() time.Time { return now })
 	memberRepo := memory.NewMembershipRepository(func() time.Time { return now })
+	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
+	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
 
 	app := New(Deps{
 		Users:         service.NewUserService(usersRepo),
 		Conversations: service.NewConversationService(usersRepo, convRepo, memberRepo, func() time.Time { return now }),
+		Messaging:     service.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now }),
 	})
 
 	// Blank username should trigger validation.
@@ -99,10 +156,13 @@ func TestWebSocketHandshake(t *testing.T) {
 	usersRepo := memory.NewUserRepository(func() time.Time { return now })
 	convRepo := memory.NewConversationRepository(func() time.Time { return now })
 	memberRepo := memory.NewMembershipRepository(func() time.Time { return now })
+	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
+	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
 
 	app := New(Deps{
 		Users:         service.NewUserService(usersRepo),
 		Conversations: service.NewConversationService(usersRepo, convRepo, memberRepo, func() time.Time { return now }),
+		Messaging:     service.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now }),
 	})
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -143,10 +203,13 @@ func TestWebSocketHandshakeInvalidUsername(t *testing.T) {
 	usersRepo := memory.NewUserRepository(func() time.Time { return now })
 	convRepo := memory.NewConversationRepository(func() time.Time { return now })
 	memberRepo := memory.NewMembershipRepository(func() time.Time { return now })
+	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
+	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
 
 	app := New(Deps{
 		Users:         service.NewUserService(usersRepo),
 		Conversations: service.NewConversationService(usersRepo, convRepo, memberRepo, func() time.Time { return now }),
+		Messaging:     service.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now }),
 	})
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
