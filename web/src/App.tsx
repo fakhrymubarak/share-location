@@ -114,7 +114,8 @@ function App() {
         type: string;
         title: string;
         created_at: string;
-        participants: { id: string; username: string }[]
+        participants: { id: string; username: string }[];
+        last_message?: { sender_id: string; body: any; message_type: string; created_at: string };
       }[]>(`/v1/conversations?user_id=${userSession.userId}`, {
         headers: { 'X-Username': userSession.username } // Pass auth if needed, though mostly relying on path for this demo
       })
@@ -133,12 +134,24 @@ function App() {
           }
         }
 
+        const messages: Message[] = []
+        if (c.last_message) {
+          messages.push({
+            id: makeId('msg'),
+            senderId: c.last_message.sender_id,
+            senderName: c.participants.find(p => p.id === c.last_message?.sender_id)?.username || 'Unknown',
+            content: typeof c.last_message.body?.text === 'string' ? c.last_message.body.text : JSON.stringify(c.last_message.body || {}),
+            timestamp: c.last_message.created_at,
+            type: c.last_message.message_type === 'text' ? 'text' : 'location'
+          })
+        }
+
         return {
           id: c.id,
           name: name,
           isGroup: c.type === 'group',
           participants: c.participants,
-          messages: [],
+          messages: messages,
           liveLocation: { active: false, points: [] }
         }
       }))
