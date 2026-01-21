@@ -24,7 +24,6 @@ Containerized stack for local/dev/test: Go Fiber API, PostgreSQL, Redis, and mig
 
 ## Example docker-compose.yml (snippet)
 ```yaml
-version: "3.9"
 services:
   db:
     image: postgres:15
