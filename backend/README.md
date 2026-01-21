@@ -5,20 +5,21 @@ Backend service for chat, conversations, and live-location sharing. Supports Web
 ## Requirements
 - Go 1.24+
 - (Optional) Docker + Docker Compose (for Postgres + Redis)
-- Make sure `APP_ENV`, `DB_URL`, and `REDIS_URL` are set when running against real services
+- Copy `.env.example` to `.env` and set real values (DB/Redis URLs, logging prefs). Compose and local runs will read these.
 
 ## Build & Run
-- Local (in-memory defaults):
+- Local (in-memory defaults; ignores DB/Redis):
   ```bash
   go test ./...
   go run ./cmd/server
   ```
 - With Docker Compose (Postgres + Redis):
   ```bash
+  cp .env.example .env  # edit passwords/urls if needed
   docker compose up --build
   ```
-  Environment defaults in `docker-compose.yml` set `DB_URL` and `REDIS_URL`.
-- Config loading: YAML under `config/` (see `docs/architecture/environment-config.md`) plus env vars `DB_URL`, `REDIS_URL`.
+  Compose reads `.env` for `POSTGRES_*`, `DB_URL`, `REDIS_URL`, and logging flags.
+- Config loading: YAML under `config/` (see `docs/architecture/environment-config.md`) plus env vars like `DB_URL`, `REDIS_URL`, `LOG_LEVEL`, `LOG_JSON`. Env vars override YAML.
 
 ## HTTP API
 - `POST /v1/login` — body `{"username":"alice"}`; returns `user_id`, `username`.
