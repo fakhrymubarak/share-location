@@ -2,7 +2,7 @@
 
 - Status: Draft
 - Owner: Backend Team
-- Last updated: 20/01/2026
+- Last updated: 21/01/2026
 
 ## Overview
 Relational source of truth for users, conversations, memberships, durable chat messages, delivery receipts, and live-location session metadata. Built on PostgreSQL with UUID primary keys, strict foreign keys, and indexes optimized for messaging order and membership checks.
@@ -18,35 +18,59 @@ Relational source of truth for users, conversations, memberships, durable chat m
 - Long-term storage of live location points (only session metadata lives in Postgres).
 
 ## Tables
-- `users`
-  - Columns: `id uuid pk`, `username text unique not null`, `display_name text null`, `created_at timestamptz not null default now()`.
-  - Notes: `username` uniqueness enforced; username is used for upsert on login/handshake.
 
-- `conversations`
-  - Columns: `id uuid pk`, `type text not null check in ('direct','group')`, `title text null`, `direct_pair_key text null`, `created_at timestamptz not null default now()`.
-  - Notes: Direct conversations are unique per user pair. `direct_pair_key` stores a deterministic sorted pair of user ids (e.g., `least:greatest`) for direct convos and is `NULL` for groups. Enforce uniqueness via a partial unique index on `(type, direct_pair_key)` where `direct_pair_key IS NOT NULL`; creation returns the existing convo if it already exists.
+### users
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `id` | `uuid pk` | Primary Key |
+| `username` | `text unique not null` | Unique username, used for login/handshake |
+| `display_name` | `text null` | Optional display name |
+| `created_at` | `timestamptz not null` | Default: `now()` |
 
-- `conversation_members`
-  - Columns: `conversation_id uuid fk -> conversations.id`, `user_id uuid fk -> users.id`, `role text not null default 'member'`, `joined_at timestamptz not null default now()`, `last_read_message_id uuid null fk -> messages.id`.
-  - PK: `(conversation_id, user_id)`.
-  - Indexes: `(conversation_id, user_id)` via PK; additional index on `(user_id)` for “my conversations” lookups.
-  - Notes: `last_read_message_id` must belong to the same conversation (composite FK on `(conversation_id, last_read_message_id)` referencing `messages(conversation_id, id)` to prevent cross-conversation pointers). Used for membership validation and receipt rollups.
+### conversations
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `id` | `uuid pk` | Primary Key |
+| `type` | `text not null` | Check: `('direct','group')` |
+| `title` | `text null` | Title for group chats, null for direct |
+| `direct_pair_key` | `text null` | Deterministic sorted pair of user IDs (e.g., `least:greatest`) for direct chats. Unique index on `(type, direct_pair_key)` where `direct_pair_key IS NOT NULL`. |
+| `created_at` | `timestamptz not null` | Default: `now()` |
 
-- `messages`
-  - Columns: `id uuid pk`, `conversation_id uuid fk`, `sender_id uuid fk -> users.id`, `body jsonb not null`, `message_type text not null check in ('text','location','media')`, `client_msg_id text not null`, `created_at timestamptz not null default now()`.
-  - Index: unique on `(conversation_id, sender_id, client_msg_id)` for idempotency within a conversation; query index on `(conversation_id, created_at, id)`; optional index on `(sender_id, created_at)` if “sent by me” queries are needed.
-  - Notes: `body` stays small (validated size); `client_msg_id` from client for dedupe scoped to conversation.
+### conversation_members
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `conversation_id` | `uuid fk` | References `conversations.id`. Part of PK. |
+| `user_id` | `uuid fk` | References `users.id`. Part of PK. Indexed for "my conversations" lookups. |
+| `role` | `text not null` | Default: `'member'` |
+| `joined_at` | `timestamptz not null` | Default: `now()` |
+| `last_read_message_id`| `uuid null fk` | References `messages.id`. Composite FK allows validation within the same conversation. |
 
-- `delivery_receipts`
-  - Columns: `message_id uuid fk -> messages.id`, `user_id uuid fk -> users.id`, `status text not null check in ('delivered','read')`, `updated_at timestamptz not null default now()`.
-  - PK: `(message_id, user_id)`.
-  - Index: on `(user_id, status)` for reporting; consider partial index on `status='read'`.
+### messages
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `id` | `uuid pk` | Primary Key |
+| `conversation_id` | `uuid fk` | References `conversations.id` |
+| `sender_id` | `uuid fk` | References `users.id` |
+| `body` | `jsonb not null` | Message content (validated size) |
+| `message_type` | `text not null` | Check: `('text','location','media')` |
+| `client_msg_id` | `text not null` | Client-side ID for deduplication. Index: unique `(conversation_id, sender_id, client_msg_id)`. |
+| `created_at` | `timestamptz not null` | Default: `now()`. Indexed: `(conversation_id, created_at, id)`. |
 
-- `live_location_sessions`
-  - Columns: `id uuid pk`, `user_id uuid fk -> users.id`, `conversation_id uuid null fk -> conversations.id`, `expires_at timestamptz not null`.
-  - Index: on `(conversation_id, expires_at)` for cleanup; `(user_id)` for publisher lookup.
-  - Constraints: unique `(user_id, conversation_id)` where `conversation_id IS NOT NULL` to allow only one active session per user per conversation; unique `(user_id)` where `conversation_id IS NULL` to prevent unlimited global sessions. Adjust partial uniques if global sessions are not allowed.
-  - Notes: Stores session metadata only; actual points are in Redis.
+### delivery_receipts
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `message_id` | `uuid fk` | References `messages.id`. Part of PK. |
+| `user_id` | `uuid fk` | References `users.id`. Part of PK. |
+| `status` | `text not null` | Check: `('delivered','read')`. Indexed: `(user_id, status)`. |
+| `updated_at` | `timestamptz not null` | Default: `now()` |
+
+### live_location_sessions
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `id` | `uuid pk` | Primary Key (Session/Stream ID) |
+| `user_id` | `uuid fk` | References `users.id`. Unique if `conversation_id` is NULL (global session). |
+| `conversation_id` | `uuid null fk` | References `conversations.id`. Unique per user per conversation. |
+| `expires_at` | `timestamptz not null` | Session expiry. Indexed: `(conversation_id, expires_at)`. |
 
 ## Constraints and integrity
 - Foreign keys on all relationships; cascading deletes are avoided—cleanup is explicit.
@@ -59,6 +83,7 @@ Relational source of truth for users, conversations, memberships, durable chat m
 - Idempotent send: `INSERT ... ON CONFLICT (conversation_id, sender_id, client_msg_id) DO UPDATE RETURNING id, created_at`.
 - Receipts: upsert on `(message_id, user_id)` to move from delivered->read.
 - Live location session lookup: `SELECT * FROM live_location_sessions WHERE id=$1 AND expires_at>now()`.
+- List conversations: `SELECT c.* FROM conversations c JOIN conversation_members cm ON c.id=cm.conversation_id WHERE cm.user_id=$1 ORDER BY c.created_at DESC`.
 
 ## Migrations
 - Use additive migrations with down steps; run within transactions.
