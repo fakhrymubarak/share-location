@@ -50,6 +50,30 @@ Conversation creation and membership management using username inputs. Supports 
 - Cap participant count and strip unsafe characters from titles.
 - Enforce ownership of conversation updates (future extension); currently creation-only.
 
+## Listing conversations
+- Endpoint: `GET /v1/conversations?user_id=<uuid>&type=<direct|group|all>`
+- AuthZ: caller must be the requested `user_id`; otherwise 403.
+- Sorting: `created_at` desc, then `id` desc.
+- Response (array):
+  ```json
+  [
+    {
+      "id": "uuid",
+      "type": "direct",
+      "title": "optional for groups",
+      "direct_pair_key": "userA:userB",
+      "created_at": "2026-01-20T12:00:00Z",
+      "member_ids": ["uuid1","uuid2"],
+      "roles": {"uuid1":"member","uuid2":"member"}
+    }
+  ]
+  ```
+- Pagination: `limit` (default 50, max 200) and `cursor` (opaque, typically `created_at:id` base64).
+- Notes:
+  - Direct conversations include all members (2 users) and pair key.
+  - Group conversations include all member_ids; roles map is optional and may be omitted for performance on large groups.
+  - Empty result is 200 with `[]`.
+
 ## Analytics/telemetry
 - Counters: conversations created by type, failed creations, participant counts.
 - Timers: end-to-end creation latency.

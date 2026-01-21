@@ -24,6 +24,7 @@ Backend service for chat, conversations, and live-location sharing. Supports Web
 ## HTTP API
 - `POST /v1/login` — body `{"username":"alice"}`; returns `user_id`, `username`.
 - `POST /v1/conversations` — body `{"type":"direct|group","title":"...","usernames":["alice","bob"]}`; returns conversation data and member IDs.
+- `GET /v1/conversations?user_id=<uuid>&type=direct|group|all` — list conversations for a user, newest first.
 - `GET /v1/conversations/:id/messages?limit=50` — paginated history ordered by `created_at,id`.
 - `POST /v1/messages/:id/receipt` — body `{"user_id":"<uuid>","status":"delivered|read"}`.
 - `POST /v1/live-locations` — body `{"user_id":"<uuid>","conversation_id":"<uuid>","ttl_seconds":900}`; returns `stream_id` and `expires_at`.
