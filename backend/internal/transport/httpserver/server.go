@@ -58,15 +58,25 @@ func New(deps Deps) *fiber.App {
 			"latency": latency.String(),
 			"ip":      c.IP(),
 		}
-		
+
 		// Attempt to log bodies as string or json if possible
 		if len(reqBody) > 0 {
-			fields["req_body"] = string(reqBody)
+			var bodyData any
+			if err := json.Unmarshal(reqBody, &bodyData); err == nil {
+				fields["req_body"] = bodyData
+			} else {
+				fields["req_body"] = string(reqBody)
+			}
 		}
 		if respBody := c.Response().Body(); len(respBody) > 0 {
 			// Limit response log size to avoid spamming huge payloads
 			if len(respBody) < 2048 {
-				fields["resp_body"] = string(respBody)
+				var bodyData any
+				if err := json.Unmarshal(respBody, &bodyData); err == nil {
+					fields["resp_body"] = bodyData
+				} else {
+					fields["resp_body"] = string(respBody)
+				}
 			} else {
 				fields["resp_body"] = "<too long>"
 			}
