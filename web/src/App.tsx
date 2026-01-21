@@ -59,7 +59,8 @@ function App() {
           senderName: existing?.participants.find(p => p.id === data.sender_id)?.username || data.sender_id,
           content: typeof data.body?.text === 'string' ? data.body.text : JSON.stringify(data.body || {}),
           timestamp: data.created_at,
-          type: data.message_type === 'text' ? 'text' : 'location'
+          type: data.message_type === 'text' ? 'text' : 'location',
+          streamId: data.body?.stream_id
         }
 
         if (existing) {
@@ -67,6 +68,8 @@ function App() {
             if (c.id !== convId) return c
             // Deduplicate by ID
             if (c.messages.some(m => m.id === message.id)) return c
+
+            // If this is a location message, it might be replacing or ensuring a stream exists
             return { ...c, messages: [...c.messages, message] }
           }))
         } else {
@@ -83,25 +86,23 @@ function App() {
         setChats(prev => prev.map(c => {
           if (c.id !== convId) return c
 
-          // Add location message marker
-          const locMsg: Message = {
-            id: makeId('loc'),
-            senderId: data.sender_id || 'live',
-            senderName: c.participants.find(p => p.id === data.sender_id)?.username || 'Live',
-            content: `Live at ${point.lat}, ${point.lng}`,
-            timestamp: data.updated_at,
-            type: 'location'
-          }
+          // Find specific message by streamId and update it
+          const updatedMessages = c.messages.map(m => {
+            if (m.streamId === data.stream_id) {
+              return { ...m, currentPoint: { lat: point.lat, lng: point.lng, timestamp: Date.parse(data.updated_at) } }
+            }
+            return m
+          })
 
           return {
             ...c,
             liveLocation: {
               ...c.liveLocation,
-              active: true,
+              active: true, // Keep global active for overlay if desired
               streamId: data.stream_id,
               points: [...c.liveLocation.points, { lat: point.lat, lng: point.lng, timestamp: Date.parse(data.updated_at) }]
             },
-            messages: [...c.messages, locMsg]
+            messages: updatedMessages
           }
         }))
         break
@@ -145,7 +146,8 @@ function App() {
             senderName: c.participants.find(p => p.id === c.last_message?.sender_id)?.username || 'Unknown',
             content: typeof c.last_message.body?.text === 'string' ? c.last_message.body.text : JSON.stringify(c.last_message.body || {}),
             timestamp: c.last_message.created_at,
-            type: c.last_message.message_type === 'text' ? 'text' : 'location'
+            type: c.last_message.message_type === 'text' ? 'text' : 'location',
+            streamId: c.last_message.body?.stream_id
           })
         }
 

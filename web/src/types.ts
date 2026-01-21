@@ -25,6 +25,8 @@ export type Message = {
   content: string
   timestamp: string
   type?: 'text' | 'location'
+  streamId?: string
+  currentPoint?: LocationPoint
 }
 
 export type Participant = {

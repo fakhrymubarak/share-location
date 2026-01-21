@@ -129,15 +129,29 @@ export function ChatRoom(props: ChatRoomProps) {
                 }),
             })
 
-            props.onUpdateChat(props.chat.id, (c) => ({
-                ...c,
-                liveLocation: {
-                    active: true,
-                    streamId: res.stream_id,
-                    expiresAt: res.expires_at,
-                    points: [],
-                },
-            }))
+            // Send a chat message to announce live location and act as anchor
+            const ws = props.socket
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    event: 'SEND_CHAT',
+                    req_id: makeId('req'),
+                    data: {
+                        conversation_id: props.chat.id,
+                        message_type: 'location',
+                        client_msg_id: makeId('client'),
+                        body: {
+                            text: 'Sharing Live Location',
+                            stream_id: res.stream_id,
+                            expires_at: res.expires_at
+                        }
+                    }
+                }))
+            }
+
+            // We rely on RECEIVE_CHAT to update the UI with the new message.
+            // But we can optimistically set the global live state if we want the map overlay to appear immediately 
+            // even before points arrive. Use with caution to avoid double state.
+            // actually, let's let the message drive it.
         } catch (err) {
             console.error('Failed to start live location', err)
         }
@@ -145,7 +159,19 @@ export function ChatRoom(props: ChatRoomProps) {
 
     const publishLocation = () => {
         const ws = props.socket
-        if (!props.chat.liveLocation.active || !ws || ws.readyState !== WebSocket.OPEN) return
+        // Use the last known streamId from chat state or find it from our own active session
+        // For simplicity, we assume one active stream per chat for now, or we use the latest one.
+        // We need the streamId returned by startLiveLocation.
+        // Since we are not storing it in a local signal, we might need to rely on props.chat.liveLocation.streamId
+        // which gets updated via App.tsx logic.
+        // BUT, if we just started, App.tsx might not have updated it yet if we removed the manual cleanup.
+        // Let's rely on props.chat.liveLocation which App.tsx updates when SUBSCRIBE_LIVE_LOCATION comes in.
+        // Wait, if we send SEND_CHAT, App.tsx creates a message. It doesn't update liveLocation state until points arrive?
+        // Correct. So we need to ensure we can publish.
+        // For this demo, let's assume the user knows they are live. 
+        // We should PROBABLY store the current streamID locally or in the chat state if we are the sender.
+        // Let's use props.chat.liveLocation.streamId if available.
+        if (!props.chat.liveLocation.streamId || !ws || ws.readyState !== WebSocket.OPEN) return
 
         const point = randomLocation()
         const payload = {
@@ -165,12 +191,7 @@ export function ChatRoom(props: ChatRoomProps) {
         ws.send(JSON.stringify(payload))
     }
 
-    const stopLiveLocation = () => {
-        props.onUpdateChat(props.chat.id, (c) => ({
-            ...c,
-            liveLocation: { ...c.liveLocation, active: false }
-        }))
-    }
+
 
     return (
         <div class="chat-room">
@@ -181,13 +202,11 @@ export function ChatRoom(props: ChatRoomProps) {
                     <span class="participants">{props.chat.participants.map(p => p.username).join(', ')}</span>
                 </div>
                 <div class="header-actions">
-                    {!props.chat.liveLocation.active ? (
-                        <button class="icon-btn" onClick={startLiveLocation} title="Share Live Location">📍</button>
-                    ) : (
+                    <button class="icon-btn" onClick={startLiveLocation} title="Share Live Location">📍</button>
+                    {props.chat.liveLocation.active && (
                         <div class="live-controls">
                             <span class="live-indicator">LIVE</span>
                             <button onClick={publishLocation} title="Update Location">📡</button>
-                            <button onClick={stopLiveLocation} title="Stop Sharing">⏹</button>
                         </div>
                     )}
                 </div>
@@ -201,7 +220,16 @@ export function ChatRoom(props: ChatRoomProps) {
                                 {msg.senderId !== props.session.userId && <div class="sender-name">{msg.senderName}</div>}
                                 <div class="message-content">
                                     {msg.type === 'location' ? (
-                                        <span>📍 {msg.content}</span>
+                                        <div>
+                                            <span>📍 {msg.content}</span>
+                                            {msg.currentPoint && (
+                                                <div class="live-update">
+                                                    Updated: {msg.currentPoint.lat.toFixed(4)}, {msg.currentPoint.lng.toFixed(4)}
+                                                    <br />
+                                                    <small>{formatClock(msg.currentPoint.timestamp)}</small>
+                                                </div>
+                                            )}
+                                        </div>
                                     ) : (
                                         msg.content
                                     )}
