@@ -109,23 +109,39 @@ function App() {
   const handleLogin = async (userSession: Session) => {
     setSession(userSession)
     try {
-      const convs = await api<{ id: string; type: string; title: string; created_at: string }[]>(`/v1/conversations?user_id=${userSession.userId}`, {
+      const convs = await api<{
+        id: string;
+        type: string;
+        title: string;
+        created_at: string;
+        participants: { id: string; username: string }[]
+      }[]>(`/v1/conversations?user_id=${userSession.userId}`, {
         headers: { 'X-Username': userSession.username } // Pass auth if needed, though mostly relying on path for this demo
       })
       // Map backend data to frontend Chat type (we need to populate participants manually as API returns minimal)
       // For this simple demo, we will map what we have.
-      // Note: The backend list endpoint returns basic info.
-      setChats(convs.map(c => ({
-        id: c.id,
-        name: c.title || 'Chat',
-        isGroup: c.type === 'group',
-        participants: [], // We don't have them from list endpoint yet. 
-        // Improvement: We successfully loaded the list, but names might be missing.
-        // Ideally we should fetch details or update backend to return them. 
-        // For now, let's load them to fix the "empty list" bug.
-        messages: [],
-        liveLocation: { active: false, points: [] }
-      })))
+      setChats(convs.map(c => {
+        // Derive name from participants if title is empty
+        let name = c.title
+        if (!name) {
+          if (c.type === 'direct') {
+            const partner = c.participants.find(p => p.username !== userSession.username)
+            name = partner ? partner.username : 'Direct Chat'
+          } else {
+            const others = c.participants.filter(p => p.username !== userSession.username).map(p => p.username)
+            name = others.length > 0 ? others.join(', ') : 'Group Chat'
+          }
+        }
+
+        return {
+          id: c.id,
+          name: name,
+          isGroup: c.type === 'group',
+          participants: c.participants,
+          messages: [],
+          liveLocation: { active: false, points: [] }
+        }
+      }))
     } catch (e) { console.error('Failed to load conversations', e) }
 
     connectSocket(userSession.username)
