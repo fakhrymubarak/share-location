@@ -87,6 +87,8 @@ components:
               type: object
             message_type:
               type: string
+              description: Message content type
+              enum: [text, location, media]
             client_msg_id:
               type: string
           required: [conversation_id, body, message_type, client_msg_id]
@@ -112,6 +114,7 @@ components:
               format: uuid
             message_type:
               type: string
+              enum: [text, location, media]
             client_msg_id:
               type: string
             body:
@@ -189,9 +192,11 @@ components:
               properties:
                 lat: {type: number}
                 lng: {type: number}
-                accuracy: {type: number}
+                accuracy: {type: number, description: "Meters"}
                 speed: {type: number}
                 heading: {type: number}
+                expires_at: {type: string, format: date-time}
+              required: [lat, lng]
             updated_at:
               type: string
               format: date-time
