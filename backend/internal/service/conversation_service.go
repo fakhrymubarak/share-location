@@ -70,7 +70,7 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 				Type:          domain.ConversationTypeDirect,
 				DirectPairKey: pairKey,
 				CreatedAt:     now,
-				Participants:  []uuid.UUID{users[0].ID, users[1].ID},
+				Participants:  toParticipants(users),
 			}
 			conv, err = s.Conversations.Create(ctx, conv)
 			if err != nil {
@@ -82,7 +82,7 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 			Type:         domain.ConversationTypeGroup,
 			Title:        strings.TrimSpace(req.Title),
 			CreatedAt:    now,
-			Participants: extractUserIDs(users),
+			Participants: toParticipants(users),
 		}
 		conv, err = s.Conversations.Create(ctx, conv)
 		if err != nil {
@@ -151,10 +151,13 @@ func buildDirectPairKey(a, b uuid.UUID) string {
 	return strings.Join(ids, ":")
 }
 
-func extractUserIDs(users []domain.User) []uuid.UUID {
-	ids := make([]uuid.UUID, 0, len(users))
+func toParticipants(users []domain.User) []domain.Participant {
+	parts := make([]domain.Participant, 0, len(users))
 	for _, u := range users {
-		ids = append(ids, u.ID)
+		parts = append(parts, domain.Participant{
+			ID:       u.ID,
+			Username: u.Username,
+		})
 	}
-	return ids
+	return parts
 }

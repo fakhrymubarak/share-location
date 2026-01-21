@@ -77,7 +77,7 @@ func (r *ConversationRepository) ListByUser(ctx context.Context, userID uuid.UUI
 	for _, c := range r.convs {
 		isMember := false
 		for _, p := range c.Participants {
-			if p == userID {
+			if p.ID == userID {
 				isMember = true
 				break
 			}

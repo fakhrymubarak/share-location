@@ -29,6 +29,12 @@ const (
 	ConversationTypeGroup  ConversationType = "group"
 )
 
+// Participant summary for lists.
+type Participant struct {
+	ID       uuid.UUID `json:"id"`
+	Username string    `json:"username"`
+}
+
 // Conversation aggregates members and messages.
 type Conversation struct {
 	ID            uuid.UUID
@@ -36,7 +42,7 @@ type Conversation struct {
 	Title         string
 	DirectPairKey string
 	CreatedAt     time.Time
-	Participants  []uuid.UUID
+	Participants  []Participant
 }
 
 // ConversationMember ties a user to a conversation with metadata.

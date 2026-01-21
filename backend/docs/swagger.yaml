@@ -21,16 +21,16 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LoginRequest'
+              $ref: "#/components/schemas/LoginRequest"
       responses:
         "200":
           description: User upserted
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LoginResponse'
+                $ref: "#/components/schemas/LoginResponse"
         "400":
-          $ref: '#/components/responses/BadRequest'
+          $ref: "#/components/responses/BadRequest"
   /v1/conversations:
     post:
       summary: Create conversation (direct or group)
@@ -39,16 +39,16 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ConversationCreateRequest'
+              $ref: "#/components/schemas/ConversationCreateRequest"
       responses:
         "200":
           description: Conversation created (or existing direct returned)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConversationCreateResponse'
+                $ref: "#/components/schemas/ConversationCreateResponse"
         "400":
-          $ref: '#/components/responses/BadRequest'
+          $ref: "#/components/responses/BadRequest"
     get:
       summary: List conversations for a user
       parameters:
@@ -81,11 +81,11 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/ConversationSummary'
+                  $ref: "#/components/schemas/ConversationSummary"
         "400":
-          $ref: '#/components/responses/BadRequest'
+          $ref: "#/components/responses/BadRequest"
         "403":
-          $ref: '#/components/responses/Forbidden'
+          $ref: "#/components/responses/Forbidden"
   /v1/conversations/{id}/messages:
     get:
       summary: List messages in a conversation
@@ -109,11 +109,11 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Message'
+                  $ref: "#/components/schemas/Message"
         "400":
-          $ref: '#/components/responses/BadRequest'
+          $ref: "#/components/responses/BadRequest"
         "403":
-          $ref: '#/components/responses/Forbidden'
+          $ref: "#/components/responses/Forbidden"
   /v1/messages/{id}/receipt:
     post:
       summary: Upsert delivery/read receipt for a message
@@ -129,14 +129,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ReceiptRequest'
+              $ref: "#/components/schemas/ReceiptRequest"
       responses:
         "204":
           description: Receipt persisted
         "400":
-          $ref: '#/components/responses/BadRequest'
+          $ref: "#/components/responses/BadRequest"
         "403":
-          $ref: '#/components/responses/Forbidden'
+          $ref: "#/components/responses/Forbidden"
   /v1/live-locations:
     post:
       summary: Start a live-location session
@@ -145,18 +145,18 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LiveLocationStartRequest'
+              $ref: "#/components/schemas/LiveLocationStartRequest"
       responses:
         "200":
           description: Session started (or renewed)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LiveLocationStartResponse'
+                $ref: "#/components/schemas/LiveLocationStartResponse"
         "400":
-          $ref: '#/components/responses/BadRequest'
+          $ref: "#/components/responses/BadRequest"
         "403":
-          $ref: '#/components/responses/Forbidden'
+          $ref: "#/components/responses/Forbidden"
   /ws:
     get:
       summary: WebSocket handshake
@@ -242,6 +242,16 @@ components:
           items:
             type: string
             format: uuid
+        participants:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              username:
+                type: string
         roles:
           type: object
           additionalProperties:
@@ -316,10 +326,10 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: "#/components/schemas/ErrorResponse"
     Forbidden:
       description: User is not allowed
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: "#/components/schemas/ErrorResponse"

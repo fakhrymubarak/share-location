@@ -67,10 +67,24 @@ func (r *ConversationRepository) FindByDirectPairKey(ctx context.Context, pairKe
 
 func (r *ConversationRepository) ListByUser(ctx context.Context, userID uuid.UUID) ([]domain.Conversation, error) {
 	const query = `
-		SELECT c.id, c.type, c.title, c.direct_pair_key, c.created_at
+		SELECT 
+			c.id, 
+			c.type, 
+			c.title, 
+			c.direct_pair_key, 
+			c.created_at,
+			COALESCE(
+				json_agg(
+					json_build_object('id', u.id, 'username', u.username)
+				) FILTER (WHERE u.id IS NOT NULL),
+				'[]'
+			) as participants
 		FROM conversations c
 		JOIN conversation_members cm ON c.id = cm.conversation_id
+		JOIN conversation_members cm_all ON c.id = cm_all.conversation_id
+		JOIN users u ON cm_all.user_id = u.id
 		WHERE cm.user_id = $1
+		GROUP BY c.id
 		ORDER BY c.created_at DESC`
 
 	rows, err := r.DB.Query(ctx, query, userID)
@@ -82,7 +96,7 @@ func (r *ConversationRepository) ListByUser(ctx context.Context, userID uuid.UUI
 	var convs []domain.Conversation
 	for rows.Next() {
 		var c domain.Conversation
-		if err := rows.Scan(&c.ID, &c.Type, &c.Title, &c.DirectPairKey, &c.CreatedAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.Type, &c.Title, &c.DirectPairKey, &c.CreatedAt, &c.Participants); err != nil {
 			return nil, err
 		}
 		convs = append(convs, c)

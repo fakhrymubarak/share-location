@@ -42,6 +42,25 @@ func New(deps Deps) *fiber.App {
 		deps.Logger = logging.Nop()
 	}
 
+	app.Use(func(c *fiber.Ctx) error {
+		start := time.Now()
+		err := c.Next()
+		latency := time.Since(start)
+
+		fields := logrus.Fields{
+			"method":  c.Method(),
+			"path":    c.Path(),
+			"status":  c.Response().StatusCode(),
+			"latency": latency.String(),
+			"ip":      c.IP(),
+		}
+		if err != nil {
+			fields["error"] = err.Error()
+		}
+		deps.Logger.WithFields(fields).Debugf("http request")
+		return err
+	})
+
 	app.Get("/health", func(c *fiber.Ctx) error { return c.SendStatus(http.StatusOK) })
 	app.Post("/v1/login", loginHandler(deps.Users))
 	app.Post("/v1/conversations", createConversationHandler(deps.Conversations))
@@ -122,12 +141,17 @@ func createConversationHandler(convs *service.ConversationService) fiber.Handler
 }
 
 func listConversationsHandler(convs *service.ConversationService) fiber.Handler {
+	type participant struct {
+		ID       string `json:"id"`
+		Username string `json:"username"`
+	}
 	type response struct {
-		ID        string `json:"id"`
-		Type      string `json:"type"`
-		Title     string `json:"title"`
-		PairKey   string `json:"direct_pair_key,omitempty"`
-		CreatedAt string `json:"created_at"`
+		ID           string        `json:"id"`
+		Type         string        `json:"type"`
+		Title        string        `json:"title"`
+		PairKey      string        `json:"direct_pair_key,omitempty"`
+		CreatedAt    string        `json:"created_at"`
+		Participants []participant `json:"participants"`
 	}
 	return func(c *fiber.Ctx) error {
 		uidStr := c.Query("user_id")
@@ -146,12 +170,20 @@ func listConversationsHandler(convs *service.ConversationService) fiber.Handler 
 
 		out := make([]response, 0, len(list))
 		for _, cv := range list {
+			parts := make([]participant, 0, len(cv.Participants))
+			for _, p := range cv.Participants {
+				parts = append(parts, participant{
+					ID:       p.ID.String(),
+					Username: p.Username,
+				})
+			}
 			out = append(out, response{
-				ID:        cv.ID.String(),
-				Type:      string(cv.Type),
-				Title:     cv.Title,
-				PairKey:   cv.DirectPairKey,
-				CreatedAt: cv.CreatedAt.Format(time.RFC3339),
+				ID:           cv.ID.String(),
+				Type:         string(cv.Type),
+				Title:        cv.Title,
+				PairKey:      cv.DirectPairKey,
+				CreatedAt:    cv.CreatedAt.Format(time.RFC3339),
+				Participants: parts,
 			})
 		}
 		return c.Status(http.StatusOK).JSON(out)
