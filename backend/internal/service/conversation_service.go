@@ -105,6 +105,11 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 	return conv, members, nil
 }
 
+// ListConversations returns all conversations for a user.
+func (s *ConversationService) ListConversations(ctx context.Context, userID uuid.UUID) ([]domain.Conversation, error) {
+	return s.Conversations.ListByUser(ctx, userID)
+}
+
 // ListMembers returns conversation members for broadcasting/authorization helpers.
 func (s *ConversationService) ListMembers(ctx context.Context, conversationID uuid.UUID) ([]domain.ConversationMember, error) {
 	if conversationID == uuid.Nil {

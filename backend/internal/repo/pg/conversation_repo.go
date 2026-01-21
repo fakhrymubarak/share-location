@@ -61,7 +61,34 @@ func (r *ConversationRepository) FindByDirectPairKey(ctx context.Context, pairKe
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.Conversation{}, domain.ErrNotFound
 		}
-		return domain.Conversation{}, err
 	}
 	return conv, nil
+}
+
+func (r *ConversationRepository) ListByUser(ctx context.Context, userID uuid.UUID) ([]domain.Conversation, error) {
+	const query = `
+		SELECT c.id, c.type, c.title, c.direct_pair_key, c.created_at
+		FROM conversations c
+		JOIN conversation_members cm ON c.id = cm.conversation_id
+		WHERE cm.user_id = $1
+		ORDER BY c.created_at DESC`
+
+	rows, err := r.DB.Query(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var convs []domain.Conversation
+	for rows.Next() {
+		var c domain.Conversation
+		if err := rows.Scan(&c.ID, &c.Type, &c.Title, &c.DirectPairKey, &c.CreatedAt); err != nil {
+			return nil, err
+		}
+		convs = append(convs, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return convs, nil
 }

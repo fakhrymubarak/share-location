@@ -19,6 +19,7 @@ type ConversationRepository interface {
 	Create(ctx context.Context, conv domain.Conversation) (domain.Conversation, error)
 	GetByID(ctx context.Context, id uuid.UUID) (domain.Conversation, error)
 	FindByDirectPairKey(ctx context.Context, pairKey string) (domain.Conversation, error)
+	ListByUser(ctx context.Context, userID uuid.UUID) ([]domain.Conversation, error)
 }
 
 // MembershipRepository manages conversation members.
