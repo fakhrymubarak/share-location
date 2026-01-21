@@ -29,9 +29,9 @@ services:
   db:
     image: postgres:15
     environment:
-      POSTGRES_USER: chatapp
-      POSTGRES_PASSWORD: chatapp
-      POSTGRES_DB: chatapp
+      POSTGRES_USER: ${POSTGRES_USER:-chatapp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_DB: ${POSTGRES_DB:-chatapp}
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
@@ -57,7 +57,7 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      DB_URL: postgres://chatapp:chatapp@db:5432/chatapp?sslmode=disable
+      DB_URL: ${DB_URL:-postgres://${POSTGRES_USER:-chatapp}:${POSTGRES_PASSWORD:-change-me}@db:5432/${POSTGRES_DB:-chatapp}?sslmode=disable}
       REDIS_URL: redis://redis:6379/0
       WS_HEARTBEAT_INTERVAL_SECONDS: 30
       WS_IDLE_TIMEOUT_SECONDS: 60

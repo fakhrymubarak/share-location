@@ -3,12 +3,12 @@ app:
 server:
   port: 8080
 database:
-  url: postgres://chatapp:${DB_PASSWORD:-chatapp}@db:5432/chatapp?sslmode=require
+  url: ${DB_URL:-postgres://${POSTGRES_USER:-chatapp}:${POSTGRES_PASSWORD:-change-me}@db:5432/${POSTGRES_DB:-chatapp}?sslmode=require}
   max_open_conns: 50
   max_idle_conns: 10
   conn_max_lifetime_minutes: 30
 redis:
-  url: rediss://redis:6379/0
+  url: ${REDIS_URL:-rediss://redis:6379/0}
   connection_pool_size: 50
 logging:
   level: info

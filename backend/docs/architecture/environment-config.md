@@ -43,12 +43,12 @@ server:
     heartbeat_interval_seconds: 30
     idle_timeout_seconds: 60
 database:
-  url: postgres://chatapp:chatapp@localhost:5432/chatapp?sslmode=disable
+  url: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}?sslmode=disable
   max_open_conns: 20
   max_idle_conns: 10
   conn_max_lifetime_minutes: 30
 redis:
-  url: redis://localhost:6379/0
+  url: ${REDIS_URL:-redis://localhost:6379/0}
   connection_pool_size: 20
 messages:
   max_payload_bytes: 16384
@@ -69,11 +69,11 @@ app:
 server:
   port: 8080
 database:
-  url: postgres://chatapp:chatapp@dev-db:5432/chatapp?sslmode=disable
+  url: ${DB_URL:-postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@dev-db:5432/${POSTGRES_DB}?sslmode=disable}
   max_open_conns: 40
   max_idle_conns: 20
 redis:
-  url: redis://dev-redis:6379/0
+  url: ${REDIS_URL:-redis://dev-redis:6379/0}
   connection_pool_size: 40
 messages:
   max_payload_bytes: 16384
@@ -94,12 +94,12 @@ app:
 server:
   port: 8080
 database:
-  url: postgres://chatapp:change-me@prod-db:5432/chatapp?sslmode=require
+  url: ${DB_URL:-postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@prod-db:5432/${POSTGRES_DB}?sslmode=require}
   max_open_conns: 80
   max_idle_conns: 30
   conn_max_lifetime_minutes: 30
 redis:
-  url: rediss://prod-redis:6379/0
+  url: ${REDIS_URL:-rediss://prod-redis:6379/0}
   connection_pool_size: 80
 messages:
   max_payload_bytes: 32768
