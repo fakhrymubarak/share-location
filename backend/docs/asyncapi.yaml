@@ -1,0 +1,212 @@
+asyncapi: '2.6.0'
+info:
+  title: Share Location WebSocket API
+  version: '0.1.0'
+  description: WebSocket events for chat messaging and live location.
+servers:
+  ws:
+    url: ws://localhost:8080/ws
+    protocol: ws
+    description: WebSocket endpoint; clients connect with username query param.
+channels:
+  ws:
+    description: WebSocket message stream
+    subscribe:
+      summary: Server-to-client events
+      message:
+        oneOf:
+          - $ref: '#/components/messages/Connected'
+          - $ref: '#/components/messages/ReceiveChat'
+          - $ref: '#/components/messages/LiveLocationUpdate'
+          - $ref: '#/components/messages/Error'
+    publish:
+      summary: Client-to-server events
+      message:
+        oneOf:
+          - $ref: '#/components/messages/SendChat'
+          - $ref: '#/components/messages/PublishLiveLocation'
+          - $ref: '#/components/messages/SubscribeLiveLocation'
+components:
+  messages:
+    Connected:
+      name: CONNECTED
+      payload:
+        $ref: '#/components/schemas/Connected'
+    SendChat:
+      name: SEND_CHAT
+      payload:
+        $ref: '#/components/schemas/SendChat'
+    ReceiveChat:
+      name: RECEIVE_CHAT
+      payload:
+        $ref: '#/components/schemas/ReceiveChat'
+    PublishLiveLocation:
+      name: PUBLISH_LIVE_LOCATION
+      payload:
+        $ref: '#/components/schemas/PublishLiveLocation'
+    SubscribeLiveLocation:
+      name: SUBSCRIBE_LIVE_LOCATION
+      payload:
+        $ref: '#/components/schemas/SubscribeLiveLocation'
+    LiveLocationUpdate:
+      name: SUBSCRIBE_LIVE_LOCATION
+      payload:
+        $ref: '#/components/schemas/LiveLocationUpdate'
+    Error:
+      name: ERROR
+      payload:
+        $ref: '#/components/schemas/Error'
+  schemas:
+    Connected:
+      type: object
+      properties:
+        event:
+          const: CONNECTED
+        data:
+          type: object
+          properties:
+            user_id:
+              type: string
+              format: uuid
+            username:
+              type: string
+    SendChat:
+      type: object
+      properties:
+        event:
+          const: SEND_CHAT
+        req_id:
+          type: string
+        data:
+          type: object
+          properties:
+            conversation_id:
+              type: string
+              format: uuid
+            body:
+              type: object
+            message_type:
+              type: string
+            client_msg_id:
+              type: string
+          required: [conversation_id, body, message_type, client_msg_id]
+      required: [event, data]
+    ReceiveChat:
+      type: object
+      properties:
+        event:
+          const: RECEIVE_CHAT
+        req_id:
+          type: string
+        data:
+          type: object
+          properties:
+            message_id:
+              type: string
+              format: uuid
+            conversation_id:
+              type: string
+              format: uuid
+            sender_id:
+              type: string
+              format: uuid
+            message_type:
+              type: string
+            client_msg_id:
+              type: string
+            body:
+              type: object
+            created_at:
+              type: string
+              format: date-time
+    PublishLiveLocation:
+      type: object
+      properties:
+        event:
+          const: PUBLISH_LIVE_LOCATION
+        req_id:
+          type: string
+        data:
+          type: object
+          properties:
+            stream_id:
+              type: string
+              format: uuid
+            conversation_id:
+              type: string
+              format: uuid
+            lat:
+              type: number
+            lng:
+              type: number
+            accuracy:
+              type: number
+            speed:
+              type: number
+            heading:
+              type: number
+            expires_at:
+              type: string
+              format: date-time
+          required: [stream_id, lat, lng]
+      required: [event, data]
+    SubscribeLiveLocation:
+      type: object
+      properties:
+        event:
+          const: SUBSCRIBE_LIVE_LOCATION
+        req_id:
+          type: string
+        data:
+          type: object
+          properties:
+            stream_id:
+              type: string
+              format: uuid
+            conversation_id:
+              type: string
+              format: uuid
+          required: [stream_id]
+      required: [event, data]
+    LiveLocationUpdate:
+      type: object
+      properties:
+        event:
+          const: SUBSCRIBE_LIVE_LOCATION
+        req_id:
+          type: string
+        data:
+          type: object
+          properties:
+            stream_id:
+              type: string
+              format: uuid
+            conversation_id:
+              type: string
+              format: uuid
+            point:
+              type: object
+              properties:
+                lat: {type: number}
+                lng: {type: number}
+                accuracy: {type: number}
+                speed: {type: number}
+                heading: {type: number}
+            updated_at:
+              type: string
+              format: date-time
+    Error:
+      type: object
+      properties:
+        event:
+          const: ERROR
+        req_id:
+          type: string
+        data:
+          type: object
+          properties:
+            code:
+              type: string
+              enum: [invalid_input, forbidden, not_found, internal, invalid_payload, invalid_conversation, invalid_stream]
+            message:
+              type: string
