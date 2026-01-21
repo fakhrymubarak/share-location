@@ -146,6 +146,17 @@ func TestSendChat_ValidatesMembershipAndInput(t *testing.T) {
 	if err != domain.ErrInvalidInput {
 		t.Fatalf("expected ErrInvalidInput for blank message type, got %v", err)
 	}
+
+	_, _, err = svc.SendChat(context.Background(), SendChatRequest{
+		ConversationID: conversationID,
+		SenderID:       senderID,
+		Body:           map[string]any{"text": "hi"},
+		MessageType:    "unsupported",
+		ClientMsgID:    "c4",
+	})
+	if err != domain.ErrInvalidInput {
+		t.Fatalf("expected ErrInvalidInput for unsupported message type, got %v", err)
+	}
 }
 
 func TestListHistoryAndReceipts(t *testing.T) {

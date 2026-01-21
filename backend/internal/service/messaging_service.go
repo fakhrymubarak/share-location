@@ -111,11 +111,20 @@ func validateSendChat(req SendChatRequest) error {
 	if req.ConversationID == uuid.Nil || req.SenderID == uuid.Nil {
 		return domain.ErrInvalidInput
 	}
-	if strings.TrimSpace(req.ClientMsgID) == "" || strings.TrimSpace(req.MessageType) == "" {
+	if strings.TrimSpace(req.ClientMsgID) == "" || !isSupportedMessageType(req.MessageType) {
 		return domain.ErrInvalidInput
 	}
 	if req.Body == nil {
 		return domain.ErrInvalidInput
 	}
 	return nil
+}
+
+func isSupportedMessageType(t string) bool {
+	switch strings.ToLower(strings.TrimSpace(t)) {
+	case "text", "location", "media":
+		return true
+	default:
+		return false
+	}
 }
