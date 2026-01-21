@@ -63,9 +63,12 @@ function App() {
         }
 
         if (existing) {
-          setChats(prev => prev.map(c =>
-            c.id === convId ? { ...c, messages: [...c.messages, message] } : c
-          ))
+          setChats(prev => prev.map(c => {
+            if (c.id !== convId) return c
+            // Deduplicate by ID
+            if (c.messages.some(m => m.id === message.id)) return c
+            return { ...c, messages: [...c.messages, message] }
+          }))
         } else {
           // New chat we don't know about? For now ignore or could fetch.
         }
@@ -170,32 +173,9 @@ function App() {
     setScreen('login')
   }
 
-  const handleSelectChat = async (chatId: string) => {
+  const handleSelectChat = (chatId: string) => {
     setSelectedChatId(chatId)
     setScreen('chat')
-
-    // Load history
-    const chat = chats().find(c => c.id === chatId)
-    if (chat && chat.messages.length === 0) {
-      try {
-        const history = await api<any[]>(`/v1/conversations/${chatId}/messages?limit=50`)
-        setChats(prev => prev.map(c =>
-          c.id === chatId ? {
-            ...c,
-            messages: history.map(msg => ({
-              id: msg.id,
-              senderId: msg.sender_id,
-              senderName: c.participants.find(p => p.id === msg.sender_id)?.username || msg.sender_id,
-              content: typeof msg.body?.text === 'string' ? msg.body.text : JSON.stringify(msg.body),
-              timestamp: msg.created_at,
-              type: msg.message_type === 'text' ? 'text' : 'location'
-            }))
-          } : c
-        ))
-      } catch (e) {
-        console.error(e)
-      }
-    }
   }
 
   return (

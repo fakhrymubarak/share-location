@@ -25,6 +25,68 @@ export function ChatRoom(props: ChatRoomProps) {
         }
     })
 
+    createEffect(async () => {
+        const chatId = props.chat.id
+        // If no messages, fetch history.
+        // We check length <= 1 because sometimes we might have just the last_message from the list view.
+        // But usually list view last_message is in correct order.
+        // Let's stick to the logic: if we open it and want full history.
+        // If we want to be smarter: check if we have "enough" messages or a specific flag.
+        // For now, let's replicate App.tsx logic: if 0 messages (or maybe just 1 last_message which might be old), fetch.
+        // Actually App.tsx logic was: if (chat.messages.length === 0).
+        // note: The conversation list mapping puts "last_message" into messages array. So length might be 1.
+        // But the user might want to see previous history too.
+        // Let's fetch if we haven't fetched history for this session yet. 
+        // A simple heuristic for this demo: fetch if length < 2.
+
+        if (props.chat.messages.length === 0 || (props.chat.messages.length === 1 && props.chat.messages[0].id.startsWith('msg-'))) {
+            // To avoid infinite re-fetching loops, we should ideally have a 'historyLoaded' flag.
+            // But let's just fetch if length is 0 for safety, OR if we rely on the previous behavior.
+            // The previous behavior was "if length === 0". 
+            // BUT, the conversation list puts the last message in `messages`. So length is usually 1.
+            // The App.tsx logic `chat.messages.length === 0` might have been flawed if LastMessage was present?
+            // Let's re-read App.tsx:
+            // setChats(convs.map(c => ... messages: c.last_message ? [...] : [] ...))
+            // So if there was a last message, length was 1. App.tsx ONLY fetched if length == 0.
+            // This means previously history was NOT fetched if there was a last message!
+            // That seems like a bug in the old code that we might want to "fix" or at least preserve.
+            // If the user wants history, we should fetch it.
+        }
+
+        // Let's implement robust fetching: always fetch history on mount/change if we suspect we don't have it.
+        // Since we don't store "hasFetchedHistory", we'll just fetch if we have few messages.
+        // A better way: fetch and merge.
+        if (props.chat.messages.length < 2) {
+            try {
+                const history = await api<any[]>(`/v1/conversations/${chatId}/messages?limit=50`)
+                if (history.length > 0) {
+                    props.onUpdateChat(chatId, (c) => {
+                        // Merge strategy: unique by ID
+                        const existingIds = new Set(c.messages.map(m => m.id))
+                        const newMessages = history.map(msg => ({
+                            id: msg.id,
+                            senderId: msg.sender_id,
+                            senderName: c.participants.find(p => p.id === msg.sender_id)?.username || msg.sender_id,
+                            content: typeof msg.body?.text === 'string' ? msg.body.text : JSON.stringify(msg.body),
+                            timestamp: msg.created_at,
+                            type: (msg.message_type === 'text' ? 'text' : 'location') as 'text' | 'location'
+                        })).filter(m => !existingIds.has(m.id))
+
+                        if (newMessages.length === 0) return c
+
+                        // Sort just in case
+                        const all = [...c.messages, ...newMessages].sort((a, b) =>
+                            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+                        )
+                        return { ...c, messages: all }
+                    })
+                }
+            } catch (err) {
+                console.error("failed to fetch history", err)
+            }
+        }
+    })
+
     onMount(() => {
         scrollToBottom()
     })
