@@ -37,8 +37,6 @@ services:
       WS_HEARTBEAT_INTERVAL_SECONDS: 30
       WS_IDLE_TIMEOUT_SECONDS: 60
       LIVE_LOCATION_MAX_TTL_SECONDS: 900
-      LOG_LEVEL: info
-      LOG_JSON: "true"
     depends_on:
       db:
         condition: service_healthy
