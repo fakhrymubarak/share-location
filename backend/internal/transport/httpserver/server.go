@@ -145,6 +145,12 @@ func listConversationsHandler(convs *service.ConversationService) fiber.Handler 
 		ID       string `json:"id"`
 		Username string `json:"username"`
 	}
+	type lastMessage struct {
+		SenderID    string `json:"sender_id"`
+		Body        any    `json:"body"`
+		MessageType string `json:"message_type"`
+		CreatedAt   string `json:"created_at"`
+	}
 	type response struct {
 		ID           string        `json:"id"`
 		Type         string        `json:"type"`
@@ -152,6 +158,7 @@ func listConversationsHandler(convs *service.ConversationService) fiber.Handler 
 		PairKey      string        `json:"direct_pair_key,omitempty"`
 		CreatedAt    string        `json:"created_at"`
 		Participants []participant `json:"participants"`
+		LastMessage  *lastMessage  `json:"last_message,omitempty"`
 	}
 	return func(c *fiber.Ctx) error {
 		uidStr := c.Query("user_id")
@@ -177,6 +184,15 @@ func listConversationsHandler(convs *service.ConversationService) fiber.Handler 
 					Username: p.Username,
 				})
 			}
+			var lm *lastMessage
+			if cv.LastMessage != nil {
+				lm = &lastMessage{
+					SenderID:    cv.LastMessage.SenderID.String(),
+					Body:        cv.LastMessage.Body,
+					MessageType: cv.LastMessage.MessageType,
+					CreatedAt:   cv.LastMessage.CreatedAt.Format(time.RFC3339),
+				}
+			}
 			out = append(out, response{
 				ID:           cv.ID.String(),
 				Type:         string(cv.Type),
@@ -184,6 +200,7 @@ func listConversationsHandler(convs *service.ConversationService) fiber.Handler 
 				PairKey:      cv.DirectPairKey,
 				CreatedAt:    cv.CreatedAt.Format(time.RFC3339),
 				Participants: parts,
+				LastMessage:  lm,
 			})
 		}
 		return c.Status(http.StatusOK).JSON(out)

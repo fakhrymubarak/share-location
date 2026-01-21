@@ -43,6 +43,7 @@ type Conversation struct {
 	DirectPairKey string
 	CreatedAt     time.Time
 	Participants  []Participant
+	LastMessage   *Message
 }
 
 // ConversationMember ties a user to a conversation with metadata.

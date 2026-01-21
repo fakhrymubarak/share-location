@@ -2,6 +2,7 @@ package pg
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -78,7 +79,21 @@ func (r *ConversationRepository) ListByUser(ctx context.Context, userID uuid.UUI
 					json_build_object('id', u.id, 'username', u.username)
 				) FILTER (WHERE u.id IS NOT NULL),
 				'[]'
-			) as participants
+			) as participants,
+			(
+				SELECT json_build_object(
+					'id', m.id,
+					'conversation_id', m.conversation_id,
+					'sender_id', m.sender_id,
+					'message_type', m.message_type,
+					'body', m.body,
+					'created_at', m.created_at
+				)
+				FROM messages m
+				WHERE m.conversation_id = c.id
+				ORDER BY m.created_at DESC, m.id DESC
+				LIMIT 1
+			) as last_message
 		FROM conversations c
 		JOIN conversation_members cm ON c.id = cm.conversation_id
 		JOIN conversation_members cm_all ON c.id = cm_all.conversation_id
@@ -96,8 +111,15 @@ func (r *ConversationRepository) ListByUser(ctx context.Context, userID uuid.UUI
 	var convs []domain.Conversation
 	for rows.Next() {
 		var c domain.Conversation
-		if err := rows.Scan(&c.ID, &c.Type, &c.Title, &c.DirectPairKey, &c.CreatedAt, &c.Participants); err != nil {
+		var lastMsgBytes []byte
+		if err := rows.Scan(&c.ID, &c.Type, &c.Title, &c.DirectPairKey, &c.CreatedAt, &c.Participants, &lastMsgBytes); err != nil {
 			return nil, err
+		}
+		if len(lastMsgBytes) > 0 {
+			var msg domain.Message
+			if err := json.Unmarshal(lastMsgBytes, &msg); err == nil {
+				c.LastMessage = &msg
+			}
 		}
 		convs = append(convs, c)
 	}

@@ -252,6 +252,19 @@ components:
                 format: uuid
               username:
                 type: string
+        last_message:
+          type: object
+          properties:
+            sender_id:
+              type: string
+              format: uuid
+            body:
+              type: object
+            message_type:
+              type: string
+            created_at:
+              type: string
+              format: date-time
         roles:
           type: object
           additionalProperties:
