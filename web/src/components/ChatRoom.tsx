@@ -1,5 +1,5 @@
-import { createSignal, For, onMount, createEffect } from 'solid-js'
-import { api, formatClock, makeId, randomLocation } from '../api'
+import { createSignal, For, onMount, createEffect, onCleanup } from 'solid-js'
+import { api, formatClock, makeId } from '../api'
 import type { Chat, Session } from '../types'
 
 type ChatRoomProps = {
@@ -12,7 +12,13 @@ type ChatRoomProps = {
 
 export function ChatRoom(props: ChatRoomProps) {
     const [messageText, setMessageText] = createSignal('')
+    const [watchId, setWatchId] = createSignal<number | null>(null)
     let messagesEndRef: HTMLDivElement | undefined
+
+    onCleanup(() => {
+        const id = watchId()
+        if (id !== null) navigator.geolocation.clearWatch(id)
+    })
 
     const scrollToBottom = () => {
         messagesEndRef?.scrollIntoView({ behavior: 'smooth' })
@@ -146,52 +152,51 @@ export function ChatRoom(props: ChatRoomProps) {
                         }
                     }
                 }))
-            }
 
-            // We rely on RECEIVE_CHAT to update the UI with the new message.
-            // But we can optimistically set the global live state if we want the map overlay to appear immediately 
-            // even before points arrive. Use with caution to avoid double state.
-            // actually, let's let the message drive it.
+                // Start watching position
+                if ('geolocation' in navigator) {
+                    const id = navigator.geolocation.watchPosition(
+                        (pos) => {
+                            if (!ws || ws.readyState !== WebSocket.OPEN) return
+                            const { latitude, longitude, accuracy, speed, heading } = pos.coords
+                            const payload = {
+                                event: 'PUBLISH_LIVE_LOCATION',
+                                req_id: makeId('req'),
+                                data: {
+                                    stream_id: res.stream_id,
+                                    conversation_id: props.chat.id,
+                                    lat: latitude,
+                                    lng: longitude,
+                                    accuracy: accuracy || 0,
+                                    speed: speed || 0,
+                                    heading: heading || 0,
+                                    expires_at: res.expires_at,
+                                },
+                            }
+                            ws.send(JSON.stringify(payload))
+                        },
+                        (err) => console.error('Geo error', err),
+                        { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+                    )
+                    setWatchId(id)
+                }
+            }
         } catch (err) {
             console.error('Failed to start live location', err)
         }
     }
 
-    const publishLocation = () => {
-        const ws = props.socket
-        // Use the last known streamId from chat state or find it from our own active session
-        // For simplicity, we assume one active stream per chat for now, or we use the latest one.
-        // We need the streamId returned by startLiveLocation.
-        // Since we are not storing it in a local signal, we might need to rely on props.chat.liveLocation.streamId
-        // which gets updated via App.tsx logic.
-        // BUT, if we just started, App.tsx might not have updated it yet if we removed the manual cleanup.
-        // Let's rely on props.chat.liveLocation which App.tsx updates when SUBSCRIBE_LIVE_LOCATION comes in.
-        // Wait, if we send SEND_CHAT, App.tsx creates a message. It doesn't update liveLocation state until points arrive?
-        // Correct. So we need to ensure we can publish.
-        // For this demo, let's assume the user knows they are live. 
-        // We should PROBABLY store the current streamID locally or in the chat state if we are the sender.
-        // Let's use props.chat.liveLocation.streamId if available.
-        if (!props.chat.liveLocation.streamId || !ws || ws.readyState !== WebSocket.OPEN) return
-
-        const point = randomLocation()
-        const payload = {
-            event: 'PUBLISH_LIVE_LOCATION',
-            req_id: makeId('req'),
-            data: {
-                stream_id: props.chat.liveLocation.streamId,
-                conversation_id: props.chat.id,
-                lat: point.lat,
-                lng: point.lng,
-                accuracy: 3,
-                speed: 0,
-                heading: 0,
-                expires_at: props.chat.liveLocation.expiresAt,
-            },
+    const stopLiveLocation = () => {
+        const id = watchId()
+        if (id !== null) {
+            navigator.geolocation.clearWatch(id)
+            setWatchId(null)
         }
-        ws.send(JSON.stringify(payload))
+        props.onUpdateChat(props.chat.id, (c) => ({
+            ...c,
+            liveLocation: { ...c.liveLocation, active: false }
+        }))
     }
-
-
 
     return (
         <div class="chat-room">
@@ -202,11 +207,12 @@ export function ChatRoom(props: ChatRoomProps) {
                     <span class="participants">{props.chat.participants.map(p => p.username).join(', ')}</span>
                 </div>
                 <div class="header-actions">
-                    <button class="icon-btn" onClick={startLiveLocation} title="Share Live Location">📍</button>
-                    {props.chat.liveLocation.active && (
+                    {!watchId() ? (
+                        <button class="icon-btn" onClick={startLiveLocation} title="Share Live Location">📍</button>
+                    ) : (
                         <div class="live-controls">
                             <span class="live-indicator">LIVE</span>
-                            <button onClick={publishLocation} title="Update Location">📡</button>
+                            <button onClick={stopLiveLocation} title="Stop Sharing" class="stop-btn">Stop</button>
                         </div>
                     )}
                 </div>
