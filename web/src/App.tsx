@@ -109,7 +109,7 @@ function App() {
   const handleLogin = async (userSession: Session) => {
     setSession(userSession)
     try {
-      const convs = await api<{ id: string; type: string; title: string; created_at: string }[]>('/v1/users/' + userSession.userId + '/conversations', {
+      const convs = await api<{ id: string; type: string; title: string; created_at: string }[]>(`/v1/conversations?user_id=${userSession.userId}`, {
         headers: { 'X-Username': userSession.username } // Pass auth if needed, though mostly relying on path for this demo
       })
       // Map backend data to frontend Chat type (we need to populate participants manually as API returns minimal)
