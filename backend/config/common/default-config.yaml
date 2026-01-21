@@ -23,5 +23,5 @@ live_location:
   strict_ttl: false
   publish_rate_per_minute: 120
 logging:
-  level: info
+  level: debug
   json: false

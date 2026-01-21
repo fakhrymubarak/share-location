@@ -28,6 +28,28 @@ var pgxPoolFactory = pgxpool.NewWithConfig
 
 func main() {
 	cfg := mustLoadConfig()
+
+	// Print all used config values.
+	println("[INFO] Running with config:")
+	println("App.Env:", cfg.App.Env)
+	println("App.Name:", cfg.App.Name)
+	println("Server.Port:", cfg.Server.Port)
+	println("Server.MaxRequestBodyBytes:", cfg.Server.MaxRequestBodyBytes)
+	println("Server.Websocket.HeartbeatIntervalSeconds:", cfg.Server.Websocket.HeartbeatIntervalSeconds)
+	println("Server.Websocket.IdleTimeoutSeconds:", cfg.Server.Websocket.IdleTimeoutSeconds)
+	println("Database.URL:", cfg.Database.URL)
+	println("Database.MaxOpenConns:", cfg.Database.MaxOpenConns)
+	println("Database.MaxIdleConns:", cfg.Database.MaxIdleConns)
+	println("Database.ConnMaxLifetimeMins:", cfg.Database.ConnMaxLifetimeMins)
+	println("Redis.URL:", cfg.Redis.URL)
+	println("Redis.ConnectionPoolSize:", cfg.Redis.ConnectionPoolSize)
+	println("Messages.MaxPayloadBytes:", cfg.Messages.MaxPayloadBytes)
+	println("Messages.MaxInFlightPerConnection:", cfg.Messages.MaxInFlightPerConnection)
+	println("LiveLocation.MaxTTLSeconds:", cfg.LiveLocation.MaxTTLSeconds)
+	println("LiveLocation.StrictTTL:", cfg.LiveLocation.StrictTTL)
+	println("LiveLocation.PublishRatePerMinute:", cfg.LiveLocation.PublishRatePerMinute)
+	println("Logging.Level:", cfg.Logging.Level)
+	println("Logging.JSON:", cfg.Logging.JSON)
 	logger := logging.New(cfg.Logging.Level, cfg.Logging.JSON)
 	app, port := buildApp(cfg, logger)
 
