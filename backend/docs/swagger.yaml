@@ -49,6 +49,44 @@ paths:
                 $ref: '#/components/schemas/ConversationCreateResponse'
         "400":
           $ref: '#/components/responses/BadRequest'
+  /v1/conversations:
+    get:
+      summary: List conversations for a user
+      parameters:
+        - in: query
+          name: user_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [direct, group, all]
+            default: all
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+        - in: query
+          name: cursor
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Conversations list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ConversationSummary'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "403":
+          $ref: '#/components/responses/Forbidden'
   /v1/conversations/{id}/messages:
     get:
       summary: List messages in a conversation
@@ -184,6 +222,31 @@ components:
         created_at:
           type: string
           format: date-time
+    ConversationSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [direct, group]
+        title:
+          type: string
+        direct_pair_key:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        member_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        roles:
+          type: object
+          additionalProperties:
+            type: string
     Message:
       type: object
       properties:
