@@ -54,6 +54,7 @@ paths:
       parameters:
         - in: query
           name: user_id
+          example: "5a2a6c0f-2bc0-49a1-a618-fff55e42bde3"
           required: true
           schema:
             type: string

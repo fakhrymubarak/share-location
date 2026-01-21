@@ -44,6 +44,10 @@ func New(deps Deps) *fiber.App {
 
 	app.Use(func(c *fiber.Ctx) error {
 		start := time.Now()
+		// Capture request body (Fiber stores it in memory)
+		reqBody := make([]byte, len(c.Body()))
+		copy(reqBody, c.Body())
+
 		err := c.Next()
 		latency := time.Since(start)
 
@@ -54,6 +58,20 @@ func New(deps Deps) *fiber.App {
 			"latency": latency.String(),
 			"ip":      c.IP(),
 		}
+		
+		// Attempt to log bodies as string or json if possible
+		if len(reqBody) > 0 {
+			fields["req_body"] = string(reqBody)
+		}
+		if respBody := c.Response().Body(); len(respBody) > 0 {
+			// Limit response log size to avoid spamming huge payloads
+			if len(respBody) < 2048 {
+				fields["resp_body"] = string(respBody)
+			} else {
+				fields["resp_body"] = "<too long>"
+			}
+		}
+
 		if err != nil {
 			fields["error"] = err.Error()
 		}
