@@ -69,8 +69,22 @@ services:
     ports:
       - "8080:8080"
 
+  pgadmin:
+    image: dpage/pgadmin4:8
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-change-me}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin:/var/lib/pgadmin
+
 volumes:
   pgdata:
+  pgadmin:
 ```
 
 ## Configuration
