@@ -29,6 +29,24 @@ var pgxPoolFactory = pgxpool.NewWithConfig
 func main() {
 	cfg := mustLoadConfig()
 
+	logger := logging.New(cfg.Logging.Level, cfg.Logging.JSON)
+	app, port := buildApp(cfg, logger)
+
+	addr := ":" + strconv.Itoa(port)
+	logger.WithFields(logrus.Fields{"event": "server_start"}).Infof("starting server on %s", addr)
+	if err := app.Listen(addr); err != nil {
+		log.Fatalf("server error: %v", err)
+	}
+}
+
+func mustLoadConfig() *config.Config {
+	env := os.Getenv("APP_ENV")
+	cfg, err := config.Load(env)
+	if err != nil {
+		log.Printf("warning: failed to load config (%v), using in-memory defaults", err)
+		cfg = defaultConfig()
+	}
+
 	// Print all used config values.
 	println("[INFO] Running with config:")
 	println("App.Env:", cfg.App.Env)
@@ -50,23 +68,7 @@ func main() {
 	println("LiveLocation.PublishRatePerMinute:", cfg.LiveLocation.PublishRatePerMinute)
 	println("Logging.Level:", cfg.Logging.Level)
 	println("Logging.JSON:", cfg.Logging.JSON)
-	logger := logging.New(cfg.Logging.Level, cfg.Logging.JSON)
-	app, port := buildApp(cfg, logger)
 
-	addr := ":" + strconv.Itoa(port)
-	logger.WithFields(logrus.Fields{"event": "server_start"}).Infof("starting server on %s", addr)
-	if err := app.Listen(addr); err != nil {
-		log.Fatalf("server error: %v", err)
-	}
-}
-
-func mustLoadConfig() *config.Config {
-	env := os.Getenv("APP_ENV")
-	cfg, err := config.Load(env)
-	if err != nil {
-		log.Printf("warning: failed to load config (%v), using in-memory defaults", err)
-		cfg = defaultConfig()
-	}
 	return cfg
 }
 
