@@ -7,7 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/fakhry/share-location/backend/internal/logging"
+	"github.com/fakhry/share-location/backend/internal/shared/logging"
 )
 
 func TestDefaultConfigAndBuildApp(t *testing.T) {

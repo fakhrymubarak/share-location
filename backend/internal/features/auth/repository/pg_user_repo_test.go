@@ -1,4 +1,4 @@
-package pg
+package repository
 
 import (
 	"context"
@@ -17,7 +17,7 @@ func TestUserUpsertByUsername(t *testing.T) {
 	require.NoError(t, err)
 	defer mock.Close()
 
-	repo := NewUserRepository(mock)
+	repo := NewPgUserRepository(mock)
 	id := uuid.New()
 	now := time.Now()
 
@@ -40,7 +40,7 @@ func TestUserGetByID(t *testing.T) {
 	require.NoError(t, err)
 	defer mock.Close()
 
-	repo := NewUserRepository(mock)
+	repo := NewPgUserRepository(mock)
 	id := uuid.New()
 	now := time.Now()
 
@@ -60,7 +60,7 @@ func TestUserGetByID_NotFound(t *testing.T) {
 	require.NoError(t, err)
 	defer mock.Close()
 
-	repo := NewUserRepository(mock)
+	repo := NewPgUserRepository(mock)
 	id := uuid.New()
 
 	mock.ExpectQuery(`SELECT id, username, display_name, created_at FROM users WHERE id=`).
@@ -77,7 +77,7 @@ func TestUserGetByUsername(t *testing.T) {
 	require.NoError(t, err)
 	defer mock.Close()
 
-	repo := NewUserRepository(mock)
+	repo := NewPgUserRepository(mock)
 	id := uuid.New()
 	now := time.Now()
 
@@ -97,7 +97,7 @@ func TestUserGetByUsername_NotFound(t *testing.T) {
 	require.NoError(t, err)
 	defer mock.Close()
 
-	repo := NewUserRepository(mock)
+	repo := NewPgUserRepository(mock)
 
 	mock.ExpectQuery(`SELECT id, username, display_name, created_at FROM users WHERE username=`).
 		WithArgs("missing").

@@ -1,4 +1,4 @@
-package memory
+package repository
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 
 func TestUserRepository_UpsertAndGet(t *testing.T) {
 	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-	r := NewUserRepository(func() time.Time { return now })
+	r := NewMemoryUserRepository(func() time.Time { return now })
 
 	u1, err := r.UpsertByUsername(context.Background(), "Alice", "Alice")
 	if err != nil {
@@ -46,7 +46,7 @@ func TestUserRepository_UpsertAndGet(t *testing.T) {
 }
 
 func TestUserRepository_NotFound(t *testing.T) {
-	r := NewUserRepository(time.Now)
+	r := NewMemoryUserRepository(time.Now)
 
 	if _, err := r.GetByID(context.Background(), domain.User{}.ID); err != domain.ErrNotFound {
 		t.Fatalf("expected ErrNotFound, got %v", err)

@@ -3,16 +3,13 @@ package repo
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"github.com/fakhry/share-location/backend/internal/domain"
+	authdomain "github.com/fakhry/share-location/backend/internal/features/auth/domain"
+	"github.com/google/uuid"
 )
 
 // UserRepository manages user records.
-type UserRepository interface {
-	UpsertByUsername(ctx context.Context, username, displayName string) (domain.User, error)
-	GetByID(ctx context.Context, id uuid.UUID) (domain.User, error)
-	GetByUsername(ctx context.Context, username string) (domain.User, error)
-}
+type UserRepository = authdomain.UserRepository
 
 // ConversationRepository manages conversations.
 type ConversationRepository interface {

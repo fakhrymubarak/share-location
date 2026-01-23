@@ -10,15 +10,17 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/sirupsen/logrus"
 
-	"github.com/fakhry/share-location/backend/internal/domain"
-	"github.com/fakhry/share-location/backend/internal/logging"
+	authservice "github.com/fakhry/share-location/backend/internal/features/auth/service"
+	authtransport "github.com/fakhry/share-location/backend/internal/features/auth/transport"
 	"github.com/fakhry/share-location/backend/internal/service"
+	shareddomain "github.com/fakhry/share-location/backend/internal/shared/domain"
+	"github.com/fakhry/share-location/backend/internal/shared/logging"
 	"github.com/fakhry/share-location/backend/internal/ws/registry"
 )
 
 // Deps aggregates services used by the HTTP/WebSocket layer.
 type Deps struct {
-	Users         *service.UserService
+	Users         *authservice.UserService
 	Conversations *service.ConversationService
 	Messaging     *service.MessagingService
 	LiveLocation  *service.LiveLocationService
@@ -88,7 +90,7 @@ func New(deps Deps) *fiber.App {
 	})
 
 	app.Get("/health", func(c *fiber.Ctx) error { return c.SendStatus(http.StatusOK) })
-	app.Post("/v1/login", loginHandler(deps.Users))
+	app.Post("/v1/login", authtransport.NewLoginHandler(deps.Users))
 	app.Post("/v1/conversations", createConversationHandler(deps.Conversations))
 	app.Get("/v1/conversations", listConversationsHandler(deps.Conversations))
 	app.Get("/v1/conversations/:id/messages", listMessagesHandler(deps.Messaging))
@@ -106,9 +108,9 @@ func errorHandler(c *fiber.Ctx, err error) error {
 		return c.Status(fe.Code).JSON(fiber.Map{"error": fe.Message})
 	}
 	switch {
-	case errors.Is(err, domain.ErrInvalidInput):
+	case errors.Is(err, shareddomain.ErrInvalidInput):
 		status = http.StatusBadRequest
-	case errors.Is(err, domain.ErrForbidden):
+	case errors.Is(err, shareddomain.ErrForbidden):
 		status = http.StatusForbidden
 	}
 	return c.Status(status).JSON(fiber.Map{"error": err.Error()})
@@ -116,11 +118,11 @@ func errorHandler(c *fiber.Ctx, err error) error {
 
 func errorCode(err error) string {
 	switch {
-	case errors.Is(err, domain.ErrInvalidInput):
+	case errors.Is(err, shareddomain.ErrInvalidInput):
 		return "invalid_input"
-	case errors.Is(err, domain.ErrForbidden):
+	case errors.Is(err, shareddomain.ErrForbidden):
 		return "forbidden"
-	case errors.Is(err, domain.ErrNotFound):
+	case errors.Is(err, shareddomain.ErrNotFound):
 		return "not_found"
 	default:
 		return "internal"

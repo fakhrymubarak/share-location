@@ -1,26 +1,23 @@
 package domain
 
 import (
-	"errors"
 	"time"
 
 	"github.com/google/uuid"
+
+	authdomain "github.com/fakhry/share-location/backend/internal/features/auth/domain"
+	shareddomain "github.com/fakhry/share-location/backend/internal/shared/domain"
 )
 
 // Common errors.
 var (
-	ErrNotFound     = errors.New("not found")
-	ErrInvalidInput = errors.New("invalid input")
-	ErrForbidden    = errors.New("forbidden")
+	ErrNotFound     = shareddomain.ErrNotFound
+	ErrInvalidInput = shareddomain.ErrInvalidInput
+	ErrForbidden    = shareddomain.ErrForbidden
 )
 
 // User represents an authenticated person identified by username.
-type User struct {
-	ID          uuid.UUID
-	Username    string
-	DisplayName string
-	CreatedAt   time.Time
-}
+type User = authdomain.User
 
 type ConversationType string
 

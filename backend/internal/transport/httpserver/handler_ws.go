@@ -9,10 +9,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
+	authservice "github.com/fakhry/share-location/backend/internal/features/auth/service"
 	"github.com/fakhry/share-location/backend/internal/service"
 )
 
-func wsHandler(users *service.UserService, messaging *service.MessagingService, live *service.LiveLocationService) func(*websocket.Conn) {
+func wsHandler(users *authservice.UserService, messaging *service.MessagingService, live *service.LiveLocationService) func(*websocket.Conn) {
 	return wsHandlerWithDeps(Deps{
 		Users:        users,
 		Messaging:    messaging,

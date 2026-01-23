@@ -1,4 +1,4 @@
-package memory
+package repository
 
 import (
 	"context"
@@ -6,30 +6,31 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fakhry/share-location/backend/internal/domain"
+	"github.com/fakhry/share-location/backend/internal/features/auth/domain"
+	shareddomain "github.com/fakhry/share-location/backend/internal/shared/domain"
 	"github.com/google/uuid"
 )
 
-type UserRepository struct {
+type MemoryUserRepository struct {
 	mu          sync.Mutex
 	usersByName map[string]domain.User
 	usersByID   map[uuid.UUID]domain.User
 	now         func() time.Time
 }
 
-// NewUserRepository returns an in-memory user repository.
-func NewUserRepository(now func() time.Time) *UserRepository {
+// NewMemoryUserRepository returns an in-memory user repository.
+func NewMemoryUserRepository(now func() time.Time) *MemoryUserRepository {
 	if now == nil {
 		now = time.Now
 	}
-	return &UserRepository{
+	return &MemoryUserRepository{
 		usersByName: make(map[string]domain.User),
 		usersByID:   make(map[uuid.UUID]domain.User),
 		now:         now,
 	}
 }
 
-func (r *UserRepository) UpsertByUsername(ctx context.Context, username, displayName string) (domain.User, error) {
+func (r *MemoryUserRepository) UpsertByUsername(ctx context.Context, username, displayName string) (domain.User, error) {
 	_ = ctx
 	key := strings.ToLower(username)
 
@@ -51,7 +52,7 @@ func (r *UserRepository) UpsertByUsername(ctx context.Context, username, display
 	return u, nil
 }
 
-func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (domain.User, error) {
+func (r *MemoryUserRepository) GetByID(ctx context.Context, id uuid.UUID) (domain.User, error) {
 	_ = ctx
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -59,10 +60,10 @@ func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (domain.User
 	if user, ok := r.usersByID[id]; ok {
 		return user, nil
 	}
-	return domain.User{}, domain.ErrNotFound
+	return domain.User{}, shareddomain.ErrNotFound
 }
 
-func (r *UserRepository) GetByUsername(ctx context.Context, username string) (domain.User, error) {
+func (r *MemoryUserRepository) GetByUsername(ctx context.Context, username string) (domain.User, error) {
 	_ = ctx
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -70,5 +71,5 @@ func (r *UserRepository) GetByUsername(ctx context.Context, username string) (do
 	if user, ok := r.usersByName[strings.ToLower(username)]; ok {
 		return user, nil
 	}
-	return domain.User{}, domain.ErrNotFound
+	return domain.User{}, shareddomain.ErrNotFound
 }

@@ -11,9 +11,9 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/fakhry/share-location/backend/internal/domain"
-	"github.com/fakhry/share-location/backend/internal/logging"
 	"github.com/fakhry/share-location/backend/internal/repo/memory"
 	"github.com/fakhry/share-location/backend/internal/service"
+	"github.com/fakhry/share-location/backend/internal/shared/logging"
 )
 
 type stubHub struct {

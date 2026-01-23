@@ -1,14 +1,14 @@
-package httpserver
+package transport
 
 import (
 	"net/http"
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/fakhry/share-location/backend/internal/service"
+	"github.com/fakhry/share-location/backend/internal/features/auth/service"
 )
 
-func loginHandler(users *service.UserService) fiber.Handler {
+func NewLoginHandler(users *service.UserService) fiber.Handler {
 	type request struct {
 		Username string `json:"username"`
 	}

@@ -1,4 +1,4 @@
-package pg
+package repository
 
 import (
 	"context"
@@ -7,19 +7,21 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/fakhry/share-location/backend/internal/domain"
+	"github.com/fakhry/share-location/backend/internal/features/auth/domain"
+	"github.com/fakhry/share-location/backend/internal/repo/pg"
+	shareddomain "github.com/fakhry/share-location/backend/internal/shared/domain"
 )
 
-// UserRepository implements repo.UserRepository backed by Postgres.
-type UserRepository struct {
-	DB PgxPool
+// PgUserRepository implements repo.UserRepository backed by Postgres.
+type PgUserRepository struct {
+	DB pg.PgxPool
 }
 
-func NewUserRepository(db PgxPool) *UserRepository {
-	return &UserRepository{DB: db}
+func NewPgUserRepository(db pg.PgxPool) *PgUserRepository {
+	return &PgUserRepository{DB: db}
 }
 
-func (r *UserRepository) UpsertByUsername(ctx context.Context, username, displayName string) (domain.User, error) {
+func (r *PgUserRepository) UpsertByUsername(ctx context.Context, username, displayName string) (domain.User, error) {
 	const query = `
 INSERT INTO users (username, display_name)
 VALUES ($1, $2)
@@ -34,24 +36,24 @@ RETURNING id, username, display_name, created_at`
 	return user, nil
 }
 
-func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (domain.User, error) {
+func (r *PgUserRepository) GetByID(ctx context.Context, id uuid.UUID) (domain.User, error) {
 	const query = `SELECT id, username, display_name, created_at FROM users WHERE id=$1`
 	var user domain.User
 	if err := r.DB.QueryRow(ctx, query, id).Scan(&user.ID, &user.Username, &user.DisplayName, &user.CreatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return domain.User{}, domain.ErrNotFound
+			return domain.User{}, shareddomain.ErrNotFound
 		}
 		return domain.User{}, err
 	}
 	return user, nil
 }
 
-func (r *UserRepository) GetByUsername(ctx context.Context, username string) (domain.User, error) {
+func (r *PgUserRepository) GetByUsername(ctx context.Context, username string) (domain.User, error) {
 	const query = `SELECT id, username, display_name, created_at FROM users WHERE username=$1`
 	var user domain.User
 	if err := r.DB.QueryRow(ctx, query, username).Scan(&user.ID, &user.Username, &user.DisplayName, &user.CreatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return domain.User{}, domain.ErrNotFound
+			return domain.User{}, shareddomain.ErrNotFound
 		}
 		return domain.User{}, err
 	}

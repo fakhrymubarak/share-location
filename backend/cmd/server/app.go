@@ -12,16 +12,20 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 
-	"github.com/fakhry/share-location/backend/internal/config"
 	dbpg "github.com/fakhry/share-location/backend/internal/db/pg"
-	"github.com/fakhry/share-location/backend/internal/logging"
 	pubredis "github.com/fakhry/share-location/backend/internal/pubsub/redis"
 	"github.com/fakhry/share-location/backend/internal/repo"
 	"github.com/fakhry/share-location/backend/internal/repo/memory"
 	pgrepo "github.com/fakhry/share-location/backend/internal/repo/pg"
 	"github.com/fakhry/share-location/backend/internal/service"
+	"github.com/fakhry/share-location/backend/internal/shared/config"
+	"github.com/fakhry/share-location/backend/internal/shared/logging"
 	"github.com/fakhry/share-location/backend/internal/transport/httpserver"
 	"github.com/fakhry/share-location/backend/internal/ws/registry"
+
+	authdomain "github.com/fakhry/share-location/backend/internal/features/auth/domain"
+	authrepo "github.com/fakhry/share-location/backend/internal/features/auth/repository"
+	authservice "github.com/fakhry/share-location/backend/internal/features/auth/service"
 )
 
 var pgxPoolFactory = pgxpool.NewWithConfig
@@ -89,7 +93,7 @@ func buildApp(cfg *config.Config, logger *logging.Logger) (*fiber.App, int) {
 	pgPool := postgresPool(cfg, logger)
 	redisCli := redisClient(cfg.Redis.URL, logger)
 
-	usersRepo := repo.UserRepository(memory.NewUserRepository(nil))
+	var usersRepo authdomain.UserRepository = authrepo.NewMemoryUserRepository(nil)
 	convsRepo := repo.ConversationRepository(memory.NewConversationRepository(nil))
 	membersRepo := repo.MembershipRepository(memory.NewMembershipRepository(nil))
 	msgRepo := repo.MessageRepository(memory.NewMessageRepository(nil))
@@ -103,7 +107,7 @@ func buildApp(cfg *config.Config, logger *logging.Logger) (*fiber.App, int) {
 	useRedisFanout := false
 
 	if pgPool != nil {
-		usersRepo = pgrepo.NewUserRepository(pgPool)
+		usersRepo = authrepo.NewPgUserRepository(pgPool)
 		convsRepo = pgrepo.NewConversationRepository(pgPool, nil)
 		membersRepo = pgrepo.NewMembershipRepository(pgPool, nil)
 		msgRepo = pgrepo.NewMessageRepository(pgPool, nil)
@@ -122,7 +126,7 @@ func buildApp(cfg *config.Config, logger *logging.Logger) (*fiber.App, int) {
 		useRedisFanout = true
 	}
 
-	userSvc := service.NewUserService(usersRepo)
+	userSvc := authservice.NewUserService(usersRepo)
 	convSvc := service.NewConversationService(usersRepo, convsRepo, membersRepo, nil)
 	msgSvc := service.NewMessagingService(msgRepo, membersRepo, msgPublisher, rcRepo, nil)
 	liveSvc := service.NewLiveLocationService(liveRepo, membersRepo, livePublisher, seconds(cfg.LiveLocation.MaxTTLSeconds), nil)

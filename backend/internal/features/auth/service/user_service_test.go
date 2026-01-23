@@ -5,13 +5,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fakhry/share-location/backend/internal/domain"
-	"github.com/fakhry/share-location/backend/internal/repo/memory"
+	"github.com/fakhry/share-location/backend/internal/features/auth/domain"
+	"github.com/fakhry/share-location/backend/internal/features/auth/repository"
+	shareddomain "github.com/fakhry/share-location/backend/internal/shared/domain"
 )
 
 func TestHandshake_UpsertsUser(t *testing.T) {
 	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-	repo := memory.NewUserRepository(func() time.Time { return now })
+	repo := repository.NewMemoryUserRepository(func() time.Time { return now })
 	svc := NewUserService(repo)
 
 	ctx := context.Background()
@@ -39,12 +40,12 @@ func TestHandshake_UpsertsUser(t *testing.T) {
 }
 
 func TestHandshake_RejectsBlankUsername(t *testing.T) {
-	repo := memory.NewUserRepository(time.Now)
+	repo := repository.NewMemoryUserRepository(time.Now)
 	svc := NewUserService(repo)
 
 	if _, err := svc.Handshake(context.Background(), "   "); err == nil {
 		t.Fatalf("expected error for blank username")
-	} else if err != domain.ErrInvalidInput {
+	} else if err != shareddomain.ErrInvalidInput {
 		t.Fatalf("expected ErrInvalidInput, got %v", err)
 	}
 }

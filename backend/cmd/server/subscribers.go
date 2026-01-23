@@ -10,8 +10,8 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/fakhry/share-location/backend/internal/domain"
-	"github.com/fakhry/share-location/backend/internal/logging"
 	"github.com/fakhry/share-location/backend/internal/service"
+	"github.com/fakhry/share-location/backend/internal/shared/logging"
 )
 
 type broadcastHub interface {
