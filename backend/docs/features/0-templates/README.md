@@ -1,8 +1,8 @@
 # Feature Tech Doc Template
 
-- Status: `<Draft|In Review|Approved>`
-- Owner: `<name>`
-- Last updated: `<DD/MM/YYYY>`
+- Status: Approved
+- Owner: <name>
+- Last updated: 23/01/2026
 
 ## Overview
 <Brief summary of the feature and user value.>

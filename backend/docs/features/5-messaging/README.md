@@ -1,8 +1,8 @@
 # Messaging
 
-- Status: Draft
+- Status: Approved
 - Owner: Backend Team
-- Last updated: 20/01/2026
+- Last updated: 23/01/2026
 
 ## Overview
 Durable messaging over WebSocket with `SEND_CHAT` and `RECEIVE_CHAT`, backed by Postgres persistence and Redis pub/sub for cross-node fan-out. Includes HTTP history retrieval and delivery receipts so offline clients can catch up.

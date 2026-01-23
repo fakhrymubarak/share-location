@@ -1,8 +1,8 @@
 # Redis Specification
 
-- Status: Draft
+- Status: Approved
 - Owner: Backend Team
-- Last updated: 21/01/2026
+- Last updated: 23/01/2026
 
 ## Overview
 Redis supports pub/sub fan-out for chat and live location, ephemeral live-location state, lightweight presence/connection hints, and optional cross-node coordination. Keys are namespaced to avoid collisions and use TTLs to prevent unbounded growth.

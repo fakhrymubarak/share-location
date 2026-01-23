@@ -1,8 +1,8 @@
 # Docker Setup
 
-- Status: Draft
+- Status: Approved
 - Owner: Backend Team
-- Last updated: 20/01/2026
+- Last updated: 23/01/2026
 
 ## Overview
 Containerized stack for local/dev/test: Go Fiber API, PostgreSQL, Redis, and migrations. Uses Docker Compose for reproducible setup with minimal host dependencies.

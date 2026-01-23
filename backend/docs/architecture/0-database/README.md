@@ -1,8 +1,8 @@
 # Database Specification
 
-- Status: Draft
+- Status: Approved
 - Owner: Backend Team
-- Last updated: 21/01/2026
+- Last updated: 23/01/2026
 
 ## Overview
 Relational source of truth for users, conversations, memberships, durable chat messages, delivery receipts, and live-location session metadata. Built on PostgreSQL with UUID primary keys, strict foreign keys, and indexes optimized for messaging order and membership checks.

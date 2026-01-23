@@ -1,8 +1,8 @@
 # Live Location
 
-- Status: Draft
+- Status: Approved
 - Owner: Backend Team
-- Last updated: 20/01/2026
+- Last updated: 23/01/2026
 
 ## Overview
 Live location publish/subscribe over WebSocket with ephemeral storage in Redis. Publishers create a session (`stream_id`), send `PUBLISH_LIVE_LOCATION` updates that are cached with TTL and broadcast over `live:{conversation_id}` channels. Subscribers attach via `SUBSCRIBE_LIVE_LOCATION` and receive updates plus the latest cached point.

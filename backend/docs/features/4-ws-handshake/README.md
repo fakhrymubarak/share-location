@@ -1,8 +1,8 @@
 # WebSocket Handshake
 
-- Status: Draft
+- Status: Approved
 - Owner: Backend Team
-- Last updated: 20/01/2026
+- Last updated: 23/01/2026
 
 ## Overview
 WebSocket upgrade and handshake flow that upserts a user by `username`, binds the connection to the resolved `user_id`, and sends a `CONNECTED` event. Maintains an in-process connection registry (plus optional Redis presence keys) to enable fan-out and observability across nodes.

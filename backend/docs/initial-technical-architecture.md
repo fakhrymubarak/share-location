@@ -1,5 +1,9 @@
 # Technical Architecture – Messaging Backend
 
+- Status: Approved
+- Owner: Backend Team
+- Last updated: 23/01/2026
+
 Role: Technical Architect. Goal is a simple, scalable backend for chat and live location built with Go Fiber, PostgreSQL, and Redis. Auth is intentionally simple: users identify by username only (no JWT/password). The server creates or looks up the user on login/connect.
 
 ## Goals
@@ -48,6 +52,7 @@ Errors return `{ "event": "ERROR", "req_id": "<req>", "code": "<string>", "messa
 ## HTTP Endpoints (Fiber)
 - `POST /v1/login` {username} — idempotently create or fetch the user and return `user_id`.
 - `POST /v1/conversations` create direct/group conversations; payload can include participant usernames so users can be added by username (server upserts users).
+- `GET /v1/conversations` list conversations (paginated) for the authenticated user.
 - `GET /v1/conversations/:id/messages` paginated history (uses message ordering by `created_at` and `id`).
 - `POST /v1/messages/:id/receipt` set delivered/read.
 - `POST /v1/live-locations` start/end publisher session (creates `stream_id`, sets TTL).

@@ -1,8 +1,8 @@
 # Environment Configuration
 
-- Status: Draft
+- Status: Approved
 - Owner: Backend Team
-- Last updated: 20/01/2026
+- Last updated: 23/01/2026
 
 ## Overview
 Environment-scoped YAML configs for the backend. A Go loader merges a common default with environment overrides (`local` uses defaults, `dev-qa` and `production` override selectively). Settings map directly to documented architecture knobs (DB/Redis URLs, TTLs, heartbeats, payload limits).

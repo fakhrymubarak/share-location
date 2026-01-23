@@ -1,8 +1,8 @@
-asyncapi: '2.6.0'
+asyncapi: "2.6.0"
 info:
   title: Share Location WebSocket API
-  version: '0.1.0'
-  description: WebSocket events for chat messaging and live location.
+  version: "1.0.0"
+  description: "WebSocket events for chat messaging and live location. (Status: Approved)"
 servers:
   ws:
     url: ws://localhost:8080/ws
@@ -15,47 +15,47 @@ channels:
       summary: Server-to-client events
       message:
         oneOf:
-          - $ref: '#/components/messages/Connected'
-          - $ref: '#/components/messages/ReceiveChat'
-          - $ref: '#/components/messages/LiveLocationUpdate'
-          - $ref: '#/components/messages/Error'
+          - $ref: "#/components/messages/Connected"
+          - $ref: "#/components/messages/ReceiveChat"
+          - $ref: "#/components/messages/LiveLocationUpdate"
+          - $ref: "#/components/messages/Error"
     publish:
       summary: Client-to-server events
       message:
         oneOf:
-          - $ref: '#/components/messages/SendChat'
-          - $ref: '#/components/messages/PublishLiveLocation'
-          - $ref: '#/components/messages/SubscribeLiveLocation'
+          - $ref: "#/components/messages/SendChat"
+          - $ref: "#/components/messages/PublishLiveLocation"
+          - $ref: "#/components/messages/SubscribeLiveLocation"
 components:
   messages:
     Connected:
       name: CONNECTED
       payload:
-        $ref: '#/components/schemas/Connected'
+        $ref: "#/components/schemas/Connected"
     SendChat:
       name: SEND_CHAT
       payload:
-        $ref: '#/components/schemas/SendChat'
+        $ref: "#/components/schemas/SendChat"
     ReceiveChat:
       name: RECEIVE_CHAT
       payload:
-        $ref: '#/components/schemas/ReceiveChat'
+        $ref: "#/components/schemas/ReceiveChat"
     PublishLiveLocation:
       name: PUBLISH_LIVE_LOCATION
       payload:
-        $ref: '#/components/schemas/PublishLiveLocation'
+        $ref: "#/components/schemas/PublishLiveLocation"
     SubscribeLiveLocation:
       name: SUBSCRIBE_LIVE_LOCATION
       payload:
-        $ref: '#/components/schemas/SubscribeLiveLocation'
+        $ref: "#/components/schemas/SubscribeLiveLocation"
     LiveLocationUpdate:
       name: SUBSCRIBE_LIVE_LOCATION
       payload:
-        $ref: '#/components/schemas/LiveLocationUpdate'
+        $ref: "#/components/schemas/LiveLocationUpdate"
     Error:
       name: ERROR
       payload:
-        $ref: '#/components/schemas/Error'
+        $ref: "#/components/schemas/Error"
   schemas:
     Connected:
       type: object
@@ -190,12 +190,12 @@ components:
             point:
               type: object
               properties:
-                lat: {type: number}
-                lng: {type: number}
-                accuracy: {type: number, description: "Meters"}
-                speed: {type: number}
-                heading: {type: number}
-                expires_at: {type: string, format: date-time}
+                lat: { type: number }
+                lng: { type: number }
+                accuracy: { type: number, description: "Meters" }
+                speed: { type: number }
+                heading: { type: number }
+                expires_at: { type: string, format: date-time }
               required: [lat, lng]
             updated_at:
               type: string
@@ -212,6 +212,15 @@ components:
           properties:
             code:
               type: string
-              enum: [invalid_input, forbidden, not_found, internal, invalid_payload, invalid_conversation, invalid_stream]
+              enum:
+                [
+                  invalid_input,
+                  forbidden,
+                  not_found,
+                  internal,
+                  invalid_payload,
+                  invalid_conversation,
+                  invalid_stream,
+                ]
             message:
               type: string

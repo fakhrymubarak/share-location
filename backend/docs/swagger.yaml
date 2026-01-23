@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
   title: Share Location Backend API
-  version: "0.1.0"
+  version: "1.0.0"
   description: >
-    HTTP and WebSocket APIs for login, conversations, messaging, delivery receipts, and live-location sessions.
+    HTTP and WebSocket APIs for login, conversations, messaging, delivery receipts, and live-location sessions. (Status: Approved)
 servers:
   - url: http://localhost:8080
 paths:

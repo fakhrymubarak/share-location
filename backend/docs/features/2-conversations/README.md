@@ -1,8 +1,8 @@
 # Conversations
 
-- Status: Draft
+- Status: Approved
 - Owner: Backend Team
-- Last updated: 20/01/2026
+- Last updated: 23/01/2026
 
 ## Overview
 Conversation creation and membership management using username inputs. Supports direct and group conversations via `POST /v1/conversations`, upserting users as needed, and establishing `conversation_members` records used for authorization across chat and live location flows.
