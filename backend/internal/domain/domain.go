@@ -7,6 +7,7 @@ import (
 
 	authdomain "github.com/fakhry/share-location/backend/internal/features/auth/domain"
 	convdomain "github.com/fakhry/share-location/backend/internal/features/conversations/domain"
+	locdomain "github.com/fakhry/share-location/backend/internal/features/location/domain"
 	shareddomain "github.com/fakhry/share-location/backend/internal/shared/domain"
 )
 
@@ -56,24 +57,7 @@ type DeliveryReceipt struct {
 }
 
 // LiveLocationSession tracks active publisher/subscriber session metadata.
-type LiveLocationSession struct {
-	ID             uuid.UUID
-	UserID         uuid.UUID
-	ConversationID uuid.UUID
-	ExpiresAt      time.Time
-	CreatedAt      time.Time
-}
+type LiveLocationSession = locdomain.LiveLocationSession
 
 // LiveLocationPoint represents the latest location for a stream.
-type LiveLocationPoint struct {
-	StreamID       uuid.UUID
-	UserID         uuid.UUID
-	ConversationID uuid.UUID
-	Lat            float64
-	Lng            float64
-	Accuracy       float64
-	Speed          float64
-	Heading        float64
-	UpdatedAt      time.Time
-	ExpiresAt      time.Time
-}
+type LiveLocationPoint = locdomain.LiveLocationPoint
