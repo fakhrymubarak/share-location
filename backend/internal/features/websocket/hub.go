@@ -1,4 +1,4 @@
-package httpserver
+package websocket
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	convservice "github.com/fakhry/share-location/backend/internal/features/conversations/service"
-	"github.com/fakhry/share-location/backend/internal/ws/registry"
+	"github.com/fakhry/share-location/backend/internal/features/websocket/registry"
 )
 
 // ConnectionHub tracks active WebSocket connections and dispatches events to members.
@@ -33,7 +33,7 @@ func NewConnectionHub(reg *registry.Registry) *ConnectionHub {
 	}
 }
 
-func (h *ConnectionHub) add(userID uuid.UUID, conn *websocket.Conn) string {
+func (h *ConnectionHub) Add(userID uuid.UUID, conn *websocket.Conn) string {
 	if h == nil {
 		return ""
 	}
@@ -46,14 +46,14 @@ func (h *ConnectionHub) add(userID uuid.UUID, conn *websocket.Conn) string {
 	return connID
 }
 
-func (h *ConnectionHub) heartbeat(userID uuid.UUID, connID string) {
+func (h *ConnectionHub) Heartbeat(userID uuid.UUID, connID string) {
 	if h == nil {
 		return
 	}
 	h.reg.Heartbeat(userID, connID)
 }
 
-func (h *ConnectionHub) remove(userID uuid.UUID, connID string) {
+func (h *ConnectionHub) Remove(userID uuid.UUID, connID string) {
 	if h == nil {
 		return
 	}

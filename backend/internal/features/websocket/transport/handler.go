@@ -1,19 +1,35 @@
-package httpserver
+package transport
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/gofiber/contrib/websocket"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
+	authservice "github.com/fakhry/share-location/backend/internal/features/auth/service"
+	convservice "github.com/fakhry/share-location/backend/internal/features/conversations/service"
+	locservice "github.com/fakhry/share-location/backend/internal/features/location/service"
 	msgservice "github.com/fakhry/share-location/backend/internal/features/messaging/service"
-	"github.com/fakhry/share-location/backend/internal/service"
+	ws "github.com/fakhry/share-location/backend/internal/features/websocket"
+	shareddomain "github.com/fakhry/share-location/backend/internal/shared/domain"
+	"github.com/fakhry/share-location/backend/internal/shared/logging"
 )
 
-func wsHandlerWithDeps(deps Deps) func(*websocket.Conn) {
+type HandlerDeps struct {
+	Users         *authservice.UserService
+	Conversations *convservice.ConversationService
+	Messaging     *msgservice.MessagingService
+	LiveLocation  *locservice.LiveLocationService
+	Hub           *ws.ConnectionHub
+	RedisFanout   bool
+	Logger        *logging.Logger
+}
+
+func NewHandler(deps HandlerDeps) func(*websocket.Conn) {
 	hub := deps.Hub
 	baseLog := deps.Logger.WithFields(logrus.Fields{"component": "ws"})
 	type envelope struct {
@@ -86,12 +102,12 @@ func wsHandlerWithDeps(deps Deps) func(*websocket.Conn) {
 		}
 
 		userLog := baseLog.WithUser(user.ID)
-		connID := hub.add(user.ID, c)
+		connID := hub.Add(user.ID, c)
 		c.SetPongHandler(func(string) error {
-			hub.heartbeat(user.ID, connID)
+			hub.Heartbeat(user.ID, connID)
 			return nil
 		})
-		defer hub.remove(user.ID, connID)
+		defer hub.Remove(user.ID, connID)
 		resp := connected{Event: "CONNECTED"}
 		resp.Data.UserID = user.ID.String()
 		resp.Data.Username = user.Username
@@ -182,7 +198,7 @@ func wsHandlerWithDeps(deps Deps) func(*websocket.Conn) {
 				if req.ExpiresAt != "" {
 					expires, _ = time.Parse(time.RFC3339, req.ExpiresAt)
 				}
-				point, err := deps.LiveLocation.PublishLocation(context.Background(), service.PublishLocationRequest{
+				point, err := deps.LiveLocation.PublishLocation(context.Background(), locservice.PublishLocationRequest{
 					StreamID:       streamID,
 					UserID:         user.ID,
 					ConversationID: convID,
@@ -271,4 +287,17 @@ func sendError(c *websocket.Conn, reqID, code, msg string) {
 	}
 	b, _ := json.Marshal(payload)
 	_ = c.WriteMessage(websocket.TextMessage, b)
+}
+
+func errorCode(err error) string {
+	switch {
+	case errors.Is(err, shareddomain.ErrInvalidInput):
+		return "invalid_input"
+	case errors.Is(err, shareddomain.ErrForbidden):
+		return "forbidden"
+	case errors.Is(err, shareddomain.ErrNotFound):
+		return "not_found"
+	default:
+		return "internal"
+	}
 }

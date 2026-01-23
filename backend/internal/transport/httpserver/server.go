@@ -14,12 +14,15 @@ import (
 	authtransport "github.com/fakhry/share-location/backend/internal/features/auth/transport"
 	convservice "github.com/fakhry/share-location/backend/internal/features/conversations/service"
 	convtransport "github.com/fakhry/share-location/backend/internal/features/conversations/transport"
+	locservice "github.com/fakhry/share-location/backend/internal/features/location/service"
+	loctransport "github.com/fakhry/share-location/backend/internal/features/location/transport"
 	msgservice "github.com/fakhry/share-location/backend/internal/features/messaging/service"
 	msgtransport "github.com/fakhry/share-location/backend/internal/features/messaging/transport"
-	"github.com/fakhry/share-location/backend/internal/service"
+	ws "github.com/fakhry/share-location/backend/internal/features/websocket"
+	"github.com/fakhry/share-location/backend/internal/features/websocket/registry"
+	wstransport "github.com/fakhry/share-location/backend/internal/features/websocket/transport"
 	shareddomain "github.com/fakhry/share-location/backend/internal/shared/domain"
 	"github.com/fakhry/share-location/backend/internal/shared/logging"
-	"github.com/fakhry/share-location/backend/internal/ws/registry"
 )
 
 // Deps aggregates services used by the HTTP/WebSocket layer.
@@ -27,9 +30,9 @@ type Deps struct {
 	Users         *authservice.UserService
 	Conversations *convservice.ConversationService
 	Messaging     *msgservice.MessagingService
-	LiveLocation  *service.LiveLocationService
+	LiveLocation  *locservice.LiveLocationService
 	Connections   *registry.Registry
-	Hub           *ConnectionHub
+	Hub           *ws.ConnectionHub
 	RedisFanout   bool
 	Logger        *logging.Logger
 }
@@ -40,7 +43,7 @@ func New(deps Deps) *fiber.App {
 	})
 
 	if deps.Hub == nil {
-		deps.Hub = NewConnectionHub(deps.Connections)
+		deps.Hub = ws.NewConnectionHub(deps.Connections)
 	}
 	if deps.Logger == nil {
 		deps.Logger = logging.Nop()
@@ -99,9 +102,17 @@ func New(deps Deps) *fiber.App {
 	app.Get("/v1/conversations", convtransport.NewListConversationsHandler(deps.Conversations))
 	app.Get("/v1/conversations/:id/messages", msgtransport.NewListMessagesHandler(deps.Messaging))
 	app.Post("/v1/messages/:id/receipt", msgtransport.NewReceiptHandler(deps.Messaging))
-	app.Post("/v1/live-locations", startLiveLocationHandler(deps.LiveLocation))
+	app.Post("/v1/live-locations", loctransport.NewStartLiveLocationHandler(deps.LiveLocation))
 
-	app.Use("/ws", websocket.New(wsHandlerWithDeps(deps)))
+	app.Use("/ws", websocket.New(wstransport.NewHandler(wstransport.HandlerDeps{
+		Users:         deps.Users,
+		Conversations: deps.Conversations,
+		Messaging:     deps.Messaging,
+		LiveLocation:  deps.LiveLocation,
+		Hub:           deps.Hub,
+		RedisFanout:   deps.RedisFanout,
+		Logger:        deps.Logger,
+	})))
 
 	return app
 }

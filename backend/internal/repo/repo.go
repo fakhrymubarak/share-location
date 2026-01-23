@@ -29,19 +29,6 @@ type MessagePublisher interface {
 	PublishMessage(ctx context.Context, msg domain.Message) error
 }
 
-// LiveLocationRepository manages live location sessions and latest points.
-type LiveLocationRepository interface {
-	UpsertSession(ctx context.Context, session domain.LiveLocationSession) (domain.LiveLocationSession, error)
-	GetSession(ctx context.Context, streamID uuid.UUID) (domain.LiveLocationSession, error)
-	SavePoint(ctx context.Context, point domain.LiveLocationPoint) error
-	GetPoint(ctx context.Context, streamID uuid.UUID) (domain.LiveLocationPoint, error)
-}
-
-// LiveLocationPublisher publishes live location updates (e.g., to Redis).
-type LiveLocationPublisher interface {
-	PublishLiveLocation(ctx context.Context, point domain.LiveLocationPoint) error
-}
-
 // ReceiptRepository manages delivery/read receipts.
 type ReceiptRepository interface {
 	Upsert(ctx context.Context, receipt domain.DeliveryReceipt) error

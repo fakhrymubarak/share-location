@@ -7,10 +7,10 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
-	"github.com/fakhry/share-location/backend/internal/service"
+	locservice "github.com/fakhry/share-location/backend/internal/features/location/service"
 )
 
-func startLiveLocationHandler(live *service.LiveLocationService) fiber.Handler {
+func NewStartLiveLocationHandler(live *locservice.LiveLocationService) fiber.Handler {
 	type request struct {
 		UserID         string `json:"user_id"`
 		ConversationID string `json:"conversation_id,omitempty"`
@@ -38,7 +38,7 @@ func startLiveLocationHandler(live *service.LiveLocationService) fiber.Handler {
 				return fiber.ErrBadRequest
 			}
 		}
-		session, err := live.StartSession(c.Context(), service.StartSessionRequest{
+		session, err := live.StartSession(c.Context(), locservice.StartSessionRequest{
 			UserID:         userID,
 			ConversationID: convID,
 			RequestedTTL:   time.Duration(req.TTLSeconds) * time.Second,

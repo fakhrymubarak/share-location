@@ -12,15 +12,12 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 
+	ws "github.com/fakhry/share-location/backend/internal/features/websocket"
+	"github.com/fakhry/share-location/backend/internal/features/websocket/registry"
 	pubredis "github.com/fakhry/share-location/backend/internal/pubsub/redis"
-	"github.com/fakhry/share-location/backend/internal/repo"
-	"github.com/fakhry/share-location/backend/internal/repo/memory"
-	pgrepo "github.com/fakhry/share-location/backend/internal/repo/pg"
-	"github.com/fakhry/share-location/backend/internal/service"
 	"github.com/fakhry/share-location/backend/internal/shared/config"
 	"github.com/fakhry/share-location/backend/internal/shared/logging"
 	"github.com/fakhry/share-location/backend/internal/transport/httpserver"
-	"github.com/fakhry/share-location/backend/internal/ws/registry"
 
 	authdomain "github.com/fakhry/share-location/backend/internal/features/auth/domain"
 	authrepo "github.com/fakhry/share-location/backend/internal/features/auth/repository"
@@ -29,6 +26,10 @@ import (
 	convdomain "github.com/fakhry/share-location/backend/internal/features/conversations/domain"
 	convrepo "github.com/fakhry/share-location/backend/internal/features/conversations/repository"
 	convservice "github.com/fakhry/share-location/backend/internal/features/conversations/service"
+
+	locdomain "github.com/fakhry/share-location/backend/internal/features/location/domain"
+	locrepo "github.com/fakhry/share-location/backend/internal/features/location/repository"
+	locservice "github.com/fakhry/share-location/backend/internal/features/location/service"
 
 	msgdomain "github.com/fakhry/share-location/backend/internal/features/messaging/domain"
 	msgrepo "github.com/fakhry/share-location/backend/internal/features/messaging/repository"
@@ -108,13 +109,13 @@ func buildApp(cfg *config.Config, logger *logging.Logger) (*fiber.App, int) {
 	var rcRepo msgdomain.ReceiptRepository = msgrepo.NewReceiptRepository(nil)
 	var msgPublisher msgservice.MessagePublisher = msgrepo.NewMessagePublisher()
 
-	// Live location (still using legacy service/repo for now)
-	livePoints := memory.NewLiveLocationRepository(nil)
-	var liveRepo repo.LiveLocationRepository = livePoints
-	var livePublisher repo.LiveLocationPublisher = memory.NewLiveLocationPublisher()
+	// Live location
+	livePoints := locrepo.NewMemoryLocationRepository(nil)
+	var liveRepo locdomain.LiveLocationRepository = livePoints
+	var livePublisher locdomain.LiveLocationPublisher = locrepo.NewMemoryLocationPublisher()
 
 	connRegistry := registry.New(seconds(cfg.Server.Websocket.IdleTimeoutSeconds), nil)
-	hub := httpserver.NewConnectionHub(connRegistry)
+	hub := ws.NewConnectionHub(connRegistry)
 	useRedisFanout := false
 
 	if pgPool != nil {
@@ -125,47 +126,15 @@ func buildApp(cfg *config.Config, logger *logging.Logger) (*fiber.App, int) {
 		msgRepo = msgrepo.NewPgMessageRepository(pgPool, nil)
 		rcRepo = msgrepo.NewPgReceiptRepository(pgPool)
 
-		liveRepo = pgrepo.NewLiveLocationRepository(pgPool, livePoints, nil)
+		liveRepo = locrepo.NewPgLocationRepository(pgPool, livePoints, nil)
 	}
 	if redisCli != nil {
-		// msgPublisher need to be handled.
-		// `pubredis` implementation for MessagePublisher likely implements legacy interface?
-		// We need to check if we can cast or wrap it.
-		// For now, let's look at `pubredis.NewMessagePublisher`.
-		// It returns `*MessagePublisher` struct.
-		// We need it to satisfy `msgservice.MessagePublisher` interface which is:
-		// Publish(ctx, msg) error
-		//
-		// If `pubredis` impl satisfies it, we can assign it.
-		// If not, we might need a wrapper.
-		// Let's explicitly cast or let it error if incompatible, then fix.
-		// But `msgservice.MessagePublisher` takes `domain.Message` (from messaging package).
-		// `pubredis` likely takes `legacy domain.Message`?
-		// Since I haven't refactored `pubredis`, it uses legacy domain.
-		// So `pubredis.NewMessagePublisher` returns a struct that uses legacy domain.
-		// If legacy domain and new domain are different types (even if identical shape), they are not compatible.
-
-		// FIXME: For RedisFanout to work, we need to refactor `pubredis` or use an adapter.
-		// Since user didn't ask to refactor Redis yet, I will comment this out or try to use adapter?
-		// Better: Temporarily disable redis message publish if Types mismatch, OR better: Refactor `pubredis` too?
-		// Phase 4 "Refactor Messaging Feature" implies complete refactor.
-		// So `pubredis` should be refactored to use new messaging domain.
-		//
-		// I'll skip redis wiring for messages for now (commented out) and fallback to memory if redis enabled?
-		// Or assume pubredis is NOT using strictly typed mismatch?
-		// Go is strict.
-		//
-		// I will comment out `msgPublisher = pubredis.NewMessagePublisher(redisCli)` and task it.
-		// Wait, if I break Redis support, I should note it.
-		//
-		// Actually, I can use an adapter here quickly.
-
-		// msgPublisher = pubredis.NewMessagePublisher(redisCli) // This will fail if types differ.
+		// msgPublisher = pubredis.NewMessagePublisher(redisCli) // Disabled until refactored
 
 		redisLive := pubredis.NewLiveLocationRepo(redisCli, seconds(cfg.LiveLocation.MaxTTLSeconds))
 		livePublisher = pubredis.NewLiveLocationPublisher(redisCli)
-		if pgLive, ok := liveRepo.(*pgrepo.LiveLocationRepository); ok {
-			pgLive.Points = redisLive
+		if pgLive, ok := liveRepo.(*locrepo.PgLocationRepository); ok {
+			pgLive.Points = redisLive // Assumes Points field exists and is public/compatible
 		} else {
 			liveRepo = redisLive
 		}
@@ -175,7 +144,7 @@ func buildApp(cfg *config.Config, logger *logging.Logger) (*fiber.App, int) {
 	userSvc := authservice.NewUserService(usersRepo)
 	convSvc := convservice.NewConversationService(usersRepo, convsRepo, membersRepo, nil)
 	msgSvc := msgservice.NewMessagingService(msgRepo, membersRepo, msgPublisher, rcRepo, nil)
-	liveSvc := service.NewLiveLocationService(liveRepo, membersRepo, livePublisher, seconds(cfg.LiveLocation.MaxTTLSeconds), nil)
+	liveSvc := locservice.NewLiveLocationService(liveRepo, membersRepo, livePublisher, seconds(cfg.LiveLocation.MaxTTLSeconds), nil)
 
 	app := httpserver.New(httpserver.Deps{
 		Users:         userSvc,
