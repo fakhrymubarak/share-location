@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 
 	authdomain "github.com/fakhry/share-location/backend/internal/features/auth/domain"
+	convdomain "github.com/fakhry/share-location/backend/internal/features/conversations/domain"
 	shareddomain "github.com/fakhry/share-location/backend/internal/shared/domain"
 )
 
@@ -19,38 +20,21 @@ var (
 // User represents an authenticated person identified by username.
 type User = authdomain.User
 
-type ConversationType string
+type ConversationType = convdomain.ConversationType
 
 const (
-	ConversationTypeDirect ConversationType = "direct"
-	ConversationTypeGroup  ConversationType = "group"
+	ConversationTypeDirect = convdomain.ConversationTypeDirect
+	ConversationTypeGroup  = convdomain.ConversationTypeGroup
 )
 
 // Participant summary for lists.
-type Participant struct {
-	ID       uuid.UUID `json:"id"`
-	Username string    `json:"username"`
-}
+type Participant = convdomain.Participant
 
 // Conversation aggregates members and messages.
-type Conversation struct {
-	ID            uuid.UUID
-	Type          ConversationType
-	Title         string
-	DirectPairKey string
-	CreatedAt     time.Time
-	Participants  []Participant
-	LastMessage   *Message
-}
+type Conversation = convdomain.Conversation
 
 // ConversationMember ties a user to a conversation with metadata.
-type ConversationMember struct {
-	ConversationID    uuid.UUID
-	UserID            uuid.UUID
-	Role              string
-	JoinedAt          time.Time
-	LastReadMessageID *uuid.UUID
-}
+type ConversationMember = convdomain.ConversationMember
 
 // Message represents a persisted chat message.
 type Message struct {

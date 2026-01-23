@@ -8,18 +8,19 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/fakhry/share-location/backend/internal/domain"
-	"github.com/fakhry/share-location/backend/internal/repo"
+	authdomain "github.com/fakhry/share-location/backend/internal/features/auth/domain"
+	convdomain "github.com/fakhry/share-location/backend/internal/features/conversations/domain"
+	shareddomain "github.com/fakhry/share-location/backend/internal/shared/domain"
 )
 
 type ConversationService struct {
-	Users         repo.UserRepository
-	Conversations repo.ConversationRepository
-	Memberships   repo.MembershipRepository
+	Users         authdomain.UserRepository
+	Conversations convdomain.ConversationRepository
+	Memberships   convdomain.MembershipRepository
 	now           func() time.Time
 }
 
-func NewConversationService(users repo.UserRepository, convs repo.ConversationRepository, members repo.MembershipRepository, now func() time.Time) *ConversationService {
+func NewConversationService(users authdomain.UserRepository, convs convdomain.ConversationRepository, members convdomain.MembershipRepository, now func() time.Time) *ConversationService {
 	if now == nil {
 		now = time.Now
 	}
@@ -32,67 +33,67 @@ func NewConversationService(users repo.UserRepository, convs repo.ConversationRe
 }
 
 type CreateConversationRequest struct {
-	Type                 domain.ConversationType
+	Type                 convdomain.ConversationType
 	Title                string
 	ParticipantUsernames []string
 }
 
-func (s *ConversationService) CreateConversation(ctx context.Context, req CreateConversationRequest) (domain.Conversation, []domain.ConversationMember, error) {
+func (s *ConversationService) CreateConversation(ctx context.Context, req CreateConversationRequest) (convdomain.Conversation, []convdomain.ConversationMember, error) {
 	if err := validateConversationRequest(req); err != nil {
-		return domain.Conversation{}, nil, err
+		return convdomain.Conversation{}, nil, err
 	}
 
 	uniqueUsernames := dedupeStrings(req.ParticipantUsernames)
 
-	users := make([]domain.User, 0, len(uniqueUsernames))
+	users := make([]authdomain.User, 0, len(uniqueUsernames))
 	for _, username := range uniqueUsernames {
 		user, err := s.Users.UpsertByUsername(ctx, username, username)
 		if err != nil {
-			return domain.Conversation{}, nil, err
+			return convdomain.Conversation{}, nil, err
 		}
 		users = append(users, user)
 	}
 
 	now := s.now()
-	var conv domain.Conversation
+	var conv convdomain.Conversation
 	var err error
 
-	if req.Type == domain.ConversationTypeDirect {
+	if req.Type == convdomain.ConversationTypeDirect {
 		if len(users) != 2 {
-			return domain.Conversation{}, nil, domain.ErrInvalidInput
+			return convdomain.Conversation{}, nil, shareddomain.ErrInvalidInput
 		}
 		pairKey := buildDirectPairKey(users[0].ID, users[1].ID)
 		existing, findErr := s.Conversations.FindByDirectPairKey(ctx, pairKey)
 		if findErr == nil {
 			conv = existing
 		} else {
-			conv = domain.Conversation{
-				Type:          domain.ConversationTypeDirect,
+			conv = convdomain.Conversation{
+				Type:          convdomain.ConversationTypeDirect,
 				DirectPairKey: pairKey,
 				CreatedAt:     now,
 				Participants:  toParticipants(users),
 			}
 			conv, err = s.Conversations.Create(ctx, conv)
 			if err != nil {
-				return domain.Conversation{}, nil, err
+				return convdomain.Conversation{}, nil, err
 			}
 		}
 	} else {
-		conv = domain.Conversation{
-			Type:         domain.ConversationTypeGroup,
+		conv = convdomain.Conversation{
+			Type:         convdomain.ConversationTypeGroup,
 			Title:        strings.TrimSpace(req.Title),
 			CreatedAt:    now,
 			Participants: toParticipants(users),
 		}
 		conv, err = s.Conversations.Create(ctx, conv)
 		if err != nil {
-			return domain.Conversation{}, nil, err
+			return convdomain.Conversation{}, nil, err
 		}
 	}
 
-	members := make([]domain.ConversationMember, 0, len(users))
+	members := make([]convdomain.ConversationMember, 0, len(users))
 	for _, user := range users {
-		members = append(members, domain.ConversationMember{
+		members = append(members, convdomain.ConversationMember{
 			ConversationID: conv.ID,
 			UserID:         user.ID,
 			Role:           "member",
@@ -100,30 +101,30 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 		})
 	}
 	if err := s.Memberships.Add(ctx, members); err != nil {
-		return domain.Conversation{}, nil, err
+		return convdomain.Conversation{}, nil, err
 	}
 	return conv, members, nil
 }
 
 // ListConversations returns all conversations for a user.
-func (s *ConversationService) ListConversations(ctx context.Context, userID uuid.UUID) ([]domain.Conversation, error) {
+func (s *ConversationService) ListConversations(ctx context.Context, userID uuid.UUID) ([]convdomain.Conversation, error) {
 	return s.Conversations.ListByUser(ctx, userID)
 }
 
 // ListMembers returns conversation members for broadcasting/authorization helpers.
-func (s *ConversationService) ListMembers(ctx context.Context, conversationID uuid.UUID) ([]domain.ConversationMember, error) {
+func (s *ConversationService) ListMembers(ctx context.Context, conversationID uuid.UUID) ([]convdomain.ConversationMember, error) {
 	if conversationID == uuid.Nil {
-		return nil, domain.ErrInvalidInput
+		return nil, shareddomain.ErrInvalidInput
 	}
 	return s.Memberships.ListByConversation(ctx, conversationID)
 }
 
 func validateConversationRequest(req CreateConversationRequest) error {
-	if req.Type != domain.ConversationTypeDirect && req.Type != domain.ConversationTypeGroup {
-		return domain.ErrInvalidInput
+	if req.Type != convdomain.ConversationTypeDirect && req.Type != convdomain.ConversationTypeGroup {
+		return shareddomain.ErrInvalidInput
 	}
 	if len(req.ParticipantUsernames) == 0 {
-		return domain.ErrInvalidInput
+		return shareddomain.ErrInvalidInput
 	}
 	return nil
 }
@@ -151,10 +152,10 @@ func buildDirectPairKey(a, b uuid.UUID) string {
 	return strings.Join(ids, ":")
 }
 
-func toParticipants(users []domain.User) []domain.Participant {
-	parts := make([]domain.Participant, 0, len(users))
+func toParticipants(users []authdomain.User) []convdomain.Participant {
+	parts := make([]convdomain.Participant, 0, len(users))
 	for _, u := range users {
-		parts = append(parts, domain.Participant{
+		parts = append(parts, convdomain.Participant{
 			ID:       u.ID,
 			Username: u.Username,
 		})

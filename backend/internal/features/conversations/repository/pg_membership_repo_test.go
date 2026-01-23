@@ -1,4 +1,4 @@
-package pg
+package repository
 
 import (
 	"context"
@@ -18,7 +18,7 @@ func TestMembershipAdd(t *testing.T) {
 	defer mock.Close()
 
 	now := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
-	repo := NewMembershipRepository(mock, func() time.Time { return now })
+	repo := NewPgMembershipRepository(mock, func() time.Time { return now })
 
 	convID := uuid.New()
 	userA := uuid.New()
@@ -41,7 +41,7 @@ func TestMembershipIsMember(t *testing.T) {
 	require.NoError(t, err)
 	defer mock.Close()
 
-	repo := NewMembershipRepository(mock, nil)
+	repo := NewPgMembershipRepository(mock, nil)
 	convID := uuid.New()
 	userID := uuid.New()
 
@@ -60,7 +60,7 @@ func TestMembershipIsMemberFalse(t *testing.T) {
 	require.NoError(t, err)
 	defer mock.Close()
 
-	repo := NewMembershipRepository(mock, nil)
+	repo := NewPgMembershipRepository(mock, nil)
 	convID := uuid.New()
 	userID := uuid.New()
 
@@ -79,7 +79,7 @@ func TestMembershipListByConversation(t *testing.T) {
 	require.NoError(t, err)
 	defer mock.Close()
 
-	repo := NewMembershipRepository(mock, nil)
+	repo := NewPgMembershipRepository(mock, nil)
 	convID := uuid.New()
 	userA := uuid.New()
 	userB := uuid.New()

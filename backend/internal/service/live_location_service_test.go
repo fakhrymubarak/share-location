@@ -8,13 +8,14 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/fakhry/share-location/backend/internal/domain"
+	convrepo "github.com/fakhry/share-location/backend/internal/features/conversations/repository"
 	"github.com/fakhry/share-location/backend/internal/repo/memory"
 )
 
 func TestStartSession_ClampsTTLAndRequiresMembership(t *testing.T) {
 	now := time.Date(2026, 1, 5, 8, 0, 0, 0, time.UTC)
 	sessionRepo := memory.NewLiveLocationRepository(func() time.Time { return now })
-	memberRepo := memory.NewMembershipRepository(func() time.Time { return now })
+	memberRepo := convrepo.NewMemoryMembershipRepository(func() time.Time { return now })
 	publisher := memory.NewLiveLocationPublisher()
 	maxTTL := 10 * time.Minute
 
@@ -64,7 +65,7 @@ func TestStartSession_ClampsTTLAndRequiresMembership(t *testing.T) {
 func TestPublishLocation_ValidatesSessionAndPublishes(t *testing.T) {
 	now := time.Date(2026, 1, 5, 9, 0, 0, 0, time.UTC)
 	sessionRepo := memory.NewLiveLocationRepository(func() time.Time { return now })
-	memberRepo := memory.NewMembershipRepository(func() time.Time { return now })
+	memberRepo := convrepo.NewMemoryMembershipRepository(func() time.Time { return now })
 	publisher := memory.NewLiveLocationPublisher()
 	svc := NewLiveLocationService(sessionRepo, memberRepo, publisher, 15*time.Minute, func() time.Time { return now })
 
@@ -154,7 +155,7 @@ func TestPublishLocation_ValidatesSessionAndPublishes(t *testing.T) {
 func TestLiveLocation_DefaultsWithoutConversation(t *testing.T) {
 	baseNow := time.Date(2026, 1, 5, 12, 0, 0, 0, time.UTC)
 	sessionRepo := memory.NewLiveLocationRepository(func() time.Time { return baseNow })
-	memberRepo := memory.NewMembershipRepository(func() time.Time { return baseNow })
+	memberRepo := convrepo.NewMemoryMembershipRepository(func() time.Time { return baseNow })
 	publisher := memory.NewLiveLocationPublisher()
 
 	// Covers default MaxTTL path with custom clock.

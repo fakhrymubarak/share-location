@@ -1,4 +1,4 @@
-package pg
+package repository
 
 import (
 	"context"
@@ -18,7 +18,7 @@ func TestConversationCreate(t *testing.T) {
 	defer mock.Close()
 
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	repo := NewConversationRepository(mock, func() time.Time { return now })
+	repo := NewPgConversationRepository(mock, func() time.Time { return now })
 
 	conv := domain.Conversation{
 		Type:          domain.ConversationTypeDirect,
@@ -42,7 +42,7 @@ func TestConversationGetByID(t *testing.T) {
 	require.NoError(t, err)
 	defer mock.Close()
 
-	repo := NewConversationRepository(mock, nil)
+	repo := NewPgConversationRepository(mock, nil)
 	id := uuid.New()
 	now := time.Now()
 
@@ -63,7 +63,7 @@ func TestConversationFindByDirectPairKey(t *testing.T) {
 	require.NoError(t, err)
 	defer mock.Close()
 
-	repo := NewConversationRepository(mock, nil)
+	repo := NewPgConversationRepository(mock, nil)
 	id := uuid.New()
 	now := time.Now()
 
@@ -83,7 +83,7 @@ func TestConversationFindByDirectPairKey_NotFound(t *testing.T) {
 	require.NoError(t, err)
 	defer mock.Close()
 
-	repo := NewConversationRepository(mock, nil)
+	repo := NewPgConversationRepository(mock, nil)
 
 	mock.ExpectQuery(`SELECT id, type, title, direct_pair_key, created_at FROM conversations WHERE direct_pair_key=`).
 		WithArgs("missing").

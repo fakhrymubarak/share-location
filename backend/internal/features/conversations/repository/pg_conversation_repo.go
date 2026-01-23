@@ -1,4 +1,4 @@
-package pg
+package repository
 
 import (
 	"context"
@@ -9,20 +9,22 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/fakhry/share-location/backend/internal/domain"
+	"github.com/fakhry/share-location/backend/internal/features/conversations/domain"
+	"github.com/fakhry/share-location/backend/internal/repo/pg"
+	shareddomain "github.com/fakhry/share-location/backend/internal/shared/domain"
 )
 
-// ConversationRepository implements repo.ConversationRepository using Postgres.
-type ConversationRepository struct {
-	DB  PgxPool
+// PgConversationRepository implements repo.ConversationRepository using Postgres.
+type PgConversationRepository struct {
+	DB  pg.PgxPool
 	now func() time.Time
 }
 
-func NewConversationRepository(db PgxPool, now func() time.Time) *ConversationRepository {
-	return &ConversationRepository{DB: db, now: now}
+func NewPgConversationRepository(db pg.PgxPool, now func() time.Time) *PgConversationRepository {
+	return &PgConversationRepository{DB: db, now: now}
 }
 
-func (r *ConversationRepository) Create(ctx context.Context, conv domain.Conversation) (domain.Conversation, error) {
+func (r *PgConversationRepository) Create(ctx context.Context, conv domain.Conversation) (domain.Conversation, error) {
 	if conv.ID == uuid.Nil {
 		conv.ID = uuid.New()
 	}
@@ -43,30 +45,30 @@ RETURNING id, type, title, direct_pair_key, created_at`
 	return stored, nil
 }
 
-func (r *ConversationRepository) GetByID(ctx context.Context, id uuid.UUID) (domain.Conversation, error) {
+func (r *PgConversationRepository) GetByID(ctx context.Context, id uuid.UUID) (domain.Conversation, error) {
 	const query = `SELECT id, type, title, direct_pair_key, created_at FROM conversations WHERE id=$1`
 	var conv domain.Conversation
 	if err := r.DB.QueryRow(ctx, query, id).Scan(&conv.ID, &conv.Type, &conv.Title, &conv.DirectPairKey, &conv.CreatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return domain.Conversation{}, domain.ErrNotFound
+			return domain.Conversation{}, shareddomain.ErrNotFound
 		}
 		return domain.Conversation{}, err
 	}
 	return conv, nil
 }
 
-func (r *ConversationRepository) FindByDirectPairKey(ctx context.Context, pairKey string) (domain.Conversation, error) {
+func (r *PgConversationRepository) FindByDirectPairKey(ctx context.Context, pairKey string) (domain.Conversation, error) {
 	const query = `SELECT id, type, title, direct_pair_key, created_at FROM conversations WHERE direct_pair_key=$1`
 	var conv domain.Conversation
 	if err := r.DB.QueryRow(ctx, query, pairKey).Scan(&conv.ID, &conv.Type, &conv.Title, &conv.DirectPairKey, &conv.CreatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return domain.Conversation{}, domain.ErrNotFound
+			return domain.Conversation{}, shareddomain.ErrNotFound
 		}
 	}
 	return conv, nil
 }
 
-func (r *ConversationRepository) ListByUser(ctx context.Context, userID uuid.UUID) ([]domain.Conversation, error) {
+func (r *PgConversationRepository) ListByUser(ctx context.Context, userID uuid.UUID) ([]domain.Conversation, error) {
 	const query = `
 		SELECT 
 			c.id, 
@@ -116,7 +118,7 @@ func (r *ConversationRepository) ListByUser(ctx context.Context, userID uuid.UUI
 			return nil, err
 		}
 		if len(lastMsgBytes) > 0 {
-			var msg domain.Message
+			var msg domain.ConversationMessage
 			if err := json.Unmarshal(lastMsgBytes, &msg); err == nil {
 				c.LastMessage = &msg
 			}
@@ -127,4 +129,11 @@ func (r *ConversationRepository) ListByUser(ctx context.Context, userID uuid.UUI
 		return nil, err
 	}
 	return convs, nil
+}
+
+func nowOr(now func() time.Time, defaultTime time.Time) time.Time {
+	if now == nil {
+		return defaultTime
+	}
+	return now()
 }

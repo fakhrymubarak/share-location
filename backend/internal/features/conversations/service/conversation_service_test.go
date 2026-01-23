@@ -8,26 +8,28 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/fakhry/share-location/backend/internal/domain"
-	"github.com/fakhry/share-location/backend/internal/repo/memory"
+	authrepo "github.com/fakhry/share-location/backend/internal/features/auth/repository"
+	convdomain "github.com/fakhry/share-location/backend/internal/features/conversations/domain"
+	convrepo "github.com/fakhry/share-location/backend/internal/features/conversations/repository"
+	shareddomain "github.com/fakhry/share-location/backend/internal/shared/domain"
 )
 
 func TestCreateDirectConversation_NewAndIdempotent(t *testing.T) {
 	now := time.Date(2026, 1, 2, 10, 0, 0, 0, time.UTC)
-	users := memory.NewUserRepository(func() time.Time { return now })
-	convs := memory.NewConversationRepository(func() time.Time { return now })
-	members := memory.NewMembershipRepository(func() time.Time { return now })
+	users := authrepo.NewMemoryUserRepository(func() time.Time { return now })
+	convs := convrepo.NewMemoryConversationRepository(func() time.Time { return now })
+	members := convrepo.NewMemoryMembershipRepository(func() time.Time { return now })
 	svc := NewConversationService(users, convs, members, func() time.Time { return now })
 
 	req := CreateConversationRequest{
-		Type:                 domain.ConversationTypeDirect,
+		Type:                 convdomain.ConversationTypeDirect,
 		ParticipantUsernames: []string{"alice", "bob"},
 	}
 	conv, convMembers, err := svc.CreateConversation(context.Background(), req)
 	if err != nil {
 		t.Fatalf("CreateConversation error: %v", err)
 	}
-	if conv.Type != domain.ConversationTypeDirect {
+	if conv.Type != convdomain.ConversationTypeDirect {
 		t.Fatalf("conv.Type = %s, want direct", conv.Type)
 	}
 	if conv.DirectPairKey == "" {
@@ -66,13 +68,13 @@ func TestCreateDirectConversation_NewAndIdempotent(t *testing.T) {
 
 func TestCreateGroupConversation(t *testing.T) {
 	now := time.Date(2026, 1, 2, 11, 0, 0, 0, time.UTC)
-	users := memory.NewUserRepository(func() time.Time { return now })
-	convs := memory.NewConversationRepository(func() time.Time { return now })
-	members := memory.NewMembershipRepository(func() time.Time { return now })
+	users := authrepo.NewMemoryUserRepository(func() time.Time { return now })
+	convs := convrepo.NewMemoryConversationRepository(func() time.Time { return now })
+	members := convrepo.NewMemoryMembershipRepository(func() time.Time { return now })
 	svc := NewConversationService(users, convs, members, func() time.Time { return now })
 
 	req := CreateConversationRequest{
-		Type:                 domain.ConversationTypeGroup,
+		Type:                 convdomain.ConversationTypeGroup,
 		Title:                "Team",
 		ParticipantUsernames: []string{"alice", "bob", "carol"},
 	}
@@ -80,7 +82,7 @@ func TestCreateGroupConversation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateConversation error: %v", err)
 	}
-	if conv.Type != domain.ConversationTypeGroup {
+	if conv.Type != convdomain.ConversationTypeGroup {
 		t.Fatalf("conv.Type = %s, want group", conv.Type)
 	}
 	if conv.DirectPairKey != "" {
@@ -92,23 +94,23 @@ func TestCreateGroupConversation(t *testing.T) {
 }
 
 func TestCreateDirectConversation_RequiresTwoUniqueParticipants(t *testing.T) {
-	users := memory.NewUserRepository(time.Now)
-	convs := memory.NewConversationRepository(time.Now)
-	members := memory.NewMembershipRepository(time.Now)
+	users := authrepo.NewMemoryUserRepository(time.Now)
+	convs := convrepo.NewMemoryConversationRepository(time.Now)
+	members := convrepo.NewMemoryMembershipRepository(time.Now)
 	svc := NewConversationService(users, convs, members, time.Now)
 
 	req := CreateConversationRequest{
-		Type:                 domain.ConversationTypeDirect,
+		Type:                 convdomain.ConversationTypeDirect,
 		ParticipantUsernames: []string{"alice", "alice"},
 	}
-	if _, _, err := svc.CreateConversation(context.Background(), req); err != domain.ErrInvalidInput {
+	if _, _, err := svc.CreateConversation(context.Background(), req); err != shareddomain.ErrInvalidInput {
 		t.Fatalf("expected ErrInvalidInput, got %v", err)
 	}
 }
 
 func TestListMembersValidation(t *testing.T) {
-	svc := NewConversationService(memory.NewUserRepository(nil), memory.NewConversationRepository(nil), memory.NewMembershipRepository(nil), nil)
-	if _, err := svc.ListMembers(context.Background(), uuid.Nil); !errors.Is(err, domain.ErrInvalidInput) {
+	svc := NewConversationService(authrepo.NewMemoryUserRepository(nil), convrepo.NewMemoryConversationRepository(nil), convrepo.NewMemoryMembershipRepository(nil), nil)
+	if _, err := svc.ListMembers(context.Background(), uuid.Nil); !errors.Is(err, shareddomain.ErrInvalidInput) {
 		t.Fatalf("expected invalid input error, got %v", err)
 	}
 }

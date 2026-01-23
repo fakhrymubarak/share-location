@@ -5,6 +5,7 @@ import (
 
 	"github.com/fakhry/share-location/backend/internal/domain"
 	authdomain "github.com/fakhry/share-location/backend/internal/features/auth/domain"
+	convdomain "github.com/fakhry/share-location/backend/internal/features/conversations/domain"
 	"github.com/google/uuid"
 )
 
@@ -12,19 +13,10 @@ import (
 type UserRepository = authdomain.UserRepository
 
 // ConversationRepository manages conversations.
-type ConversationRepository interface {
-	Create(ctx context.Context, conv domain.Conversation) (domain.Conversation, error)
-	GetByID(ctx context.Context, id uuid.UUID) (domain.Conversation, error)
-	FindByDirectPairKey(ctx context.Context, pairKey string) (domain.Conversation, error)
-	ListByUser(ctx context.Context, userID uuid.UUID) ([]domain.Conversation, error)
-}
+type ConversationRepository = convdomain.ConversationRepository
 
 // MembershipRepository manages conversation members.
-type MembershipRepository interface {
-	Add(ctx context.Context, members []domain.ConversationMember) error
-	IsMember(ctx context.Context, conversationID, userID uuid.UUID) (bool, error)
-	ListByConversation(ctx context.Context, conversationID uuid.UUID) ([]domain.ConversationMember, error)
-}
+type MembershipRepository = convdomain.MembershipRepository
 
 // MessageRepository manages chat messages with idempotency.
 type MessageRepository interface {

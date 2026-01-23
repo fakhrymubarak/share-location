@@ -1,17 +1,17 @@
-package memory
+package repository
 
 import (
 	"context"
 	"testing"
 	"time"
 
-	"github.com/fakhry/share-location/backend/internal/domain"
+	"github.com/fakhry/share-location/backend/internal/features/conversations/domain"
 	"github.com/google/uuid"
 )
 
 func TestMembershipRepository_AddAndList(t *testing.T) {
 	now := time.Date(2026, 1, 3, 10, 0, 0, 0, time.UTC)
-	r := NewMembershipRepository(func() time.Time { return now })
+	r := NewMemoryMembershipRepository(func() time.Time { return now })
 
 	convID := uuid.New()
 	userA := uuid.New()

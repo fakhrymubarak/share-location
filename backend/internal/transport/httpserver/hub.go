@@ -8,7 +8,7 @@ import (
 	"github.com/gofiber/contrib/websocket"
 	"github.com/google/uuid"
 
-	"github.com/fakhry/share-location/backend/internal/service"
+	convservice "github.com/fakhry/share-location/backend/internal/features/conversations/service"
 	"github.com/fakhry/share-location/backend/internal/ws/registry"
 )
 
@@ -65,7 +65,7 @@ func (h *ConnectionHub) remove(userID uuid.UUID, connID string) {
 }
 
 // BroadcastToConversation delivers payload to all members' connections except the excluded one.
-func (h *ConnectionHub) BroadcastToConversation(ctx context.Context, convSvc *service.ConversationService, convID uuid.UUID, excludeConnID string, payload []byte) {
+func (h *ConnectionHub) BroadcastToConversation(ctx context.Context, convSvc *convservice.ConversationService, convID uuid.UUID, excludeConnID string, payload []byte) {
 	if h == nil || convSvc == nil || convID == uuid.Nil {
 		return
 	}

@@ -11,8 +11,9 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/fakhry/share-location/backend/internal/domain"
-	"github.com/fakhry/share-location/backend/internal/repo/memory"
-	"github.com/fakhry/share-location/backend/internal/service"
+	authrepo "github.com/fakhry/share-location/backend/internal/features/auth/repository"
+	convrepo "github.com/fakhry/share-location/backend/internal/features/conversations/repository"
+	convservice "github.com/fakhry/share-location/backend/internal/features/conversations/service"
 	"github.com/fakhry/share-location/backend/internal/shared/logging"
 )
 
@@ -20,7 +21,7 @@ type stubHub struct {
 	payloads chan []byte
 }
 
-func (s *stubHub) BroadcastToConversation(ctx context.Context, _ *service.ConversationService, _ uuid.UUID, _ string, payload []byte) {
+func (s *stubHub) BroadcastToConversation(ctx context.Context, _ *convservice.ConversationService, _ uuid.UUID, _ string, payload []byte) {
 	select {
 	case s.payloads <- payload:
 	case <-ctx.Done():
@@ -36,7 +37,7 @@ func TestStartRedisFanoutBroadcastsChat(t *testing.T) {
 
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	hub := &stubHub{payloads: make(chan []byte, 1)}
-	convSvc := service.NewConversationService(memory.NewUserRepository(nil), memory.NewConversationRepository(nil), memory.NewMembershipRepository(nil), nil)
+	convSvc := convservice.NewConversationService(authrepo.NewMemoryUserRepository(nil), convrepo.NewMemoryConversationRepository(nil), convrepo.NewMemoryMembershipRepository(nil), nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -74,7 +75,7 @@ func TestStartRedisFanoutBroadcastsLive(t *testing.T) {
 
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	hub := &stubHub{payloads: make(chan []byte, 1)}
-	convSvc := service.NewConversationService(memory.NewUserRepository(nil), memory.NewConversationRepository(nil), memory.NewMembershipRepository(nil), nil)
+	convSvc := convservice.NewConversationService(authrepo.NewMemoryUserRepository(nil), convrepo.NewMemoryConversationRepository(nil), convrepo.NewMemoryMembershipRepository(nil), nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

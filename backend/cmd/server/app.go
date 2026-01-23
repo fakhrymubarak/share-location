@@ -26,6 +26,10 @@ import (
 	authdomain "github.com/fakhry/share-location/backend/internal/features/auth/domain"
 	authrepo "github.com/fakhry/share-location/backend/internal/features/auth/repository"
 	authservice "github.com/fakhry/share-location/backend/internal/features/auth/service"
+
+	convdomain "github.com/fakhry/share-location/backend/internal/features/conversations/domain"
+	convrepo "github.com/fakhry/share-location/backend/internal/features/conversations/repository"
+	convservice "github.com/fakhry/share-location/backend/internal/features/conversations/service"
 )
 
 var pgxPoolFactory = pgxpool.NewWithConfig
@@ -94,8 +98,9 @@ func buildApp(cfg *config.Config, logger *logging.Logger) (*fiber.App, int) {
 	redisCli := redisClient(cfg.Redis.URL, logger)
 
 	var usersRepo authdomain.UserRepository = authrepo.NewMemoryUserRepository(nil)
-	convsRepo := repo.ConversationRepository(memory.NewConversationRepository(nil))
-	membersRepo := repo.MembershipRepository(memory.NewMembershipRepository(nil))
+	var convsRepo convdomain.ConversationRepository = convrepo.NewMemoryConversationRepository(nil)
+	var membersRepo convdomain.MembershipRepository = convrepo.NewMemoryMembershipRepository(nil)
+
 	msgRepo := repo.MessageRepository(memory.NewMessageRepository(nil))
 	rcRepo := repo.ReceiptRepository(memory.NewReceiptRepository(nil))
 	livePoints := memory.NewLiveLocationRepository(nil)
@@ -108,8 +113,8 @@ func buildApp(cfg *config.Config, logger *logging.Logger) (*fiber.App, int) {
 
 	if pgPool != nil {
 		usersRepo = authrepo.NewPgUserRepository(pgPool)
-		convsRepo = pgrepo.NewConversationRepository(pgPool, nil)
-		membersRepo = pgrepo.NewMembershipRepository(pgPool, nil)
+		convsRepo = convrepo.NewPgConversationRepository(pgPool, nil)
+		membersRepo = convrepo.NewPgMembershipRepository(pgPool, nil)
 		msgRepo = pgrepo.NewMessageRepository(pgPool, nil)
 		rcRepo = pgrepo.NewReceiptRepository(pgPool)
 		liveRepo = pgrepo.NewLiveLocationRepository(pgPool, livePoints, nil)
@@ -127,7 +132,7 @@ func buildApp(cfg *config.Config, logger *logging.Logger) (*fiber.App, int) {
 	}
 
 	userSvc := authservice.NewUserService(usersRepo)
-	convSvc := service.NewConversationService(usersRepo, convsRepo, membersRepo, nil)
+	convSvc := convservice.NewConversationService(usersRepo, convsRepo, membersRepo, nil)
 	msgSvc := service.NewMessagingService(msgRepo, membersRepo, msgPublisher, rcRepo, nil)
 	liveSvc := service.NewLiveLocationService(liveRepo, membersRepo, livePublisher, seconds(cfg.LiveLocation.MaxTTLSeconds), nil)
 
@@ -143,6 +148,9 @@ func buildApp(cfg *config.Config, logger *logging.Logger) (*fiber.App, int) {
 	})
 
 	if useRedisFanout && redisCli != nil {
+		// Note: startRedisFanout likely needs updated ConversationService signature if it uses it.
+		// Let's check startRedisFanout in subscribers.go? Or just assume it works if interfaces match.
+		// Ideally we should check subscribers.go too.
 		ctx := context.Background()
 		startRedisFanout(ctx, redisCli, hub, convSvc, logger)
 	}

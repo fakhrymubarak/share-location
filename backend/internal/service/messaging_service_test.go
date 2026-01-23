@@ -8,13 +8,14 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/fakhry/share-location/backend/internal/domain"
+	convrepo "github.com/fakhry/share-location/backend/internal/features/conversations/repository"
 	"github.com/fakhry/share-location/backend/internal/repo/memory"
 )
 
 func TestSendChat_PersistsAndPublishes(t *testing.T) {
 	now := time.Date(2026, 1, 4, 9, 0, 0, 0, time.UTC)
 	messageRepo := memory.NewMessageRepository(func() time.Time { return now })
-	membershipRepo := memory.NewMembershipRepository(func() time.Time { return now })
+	membershipRepo := convrepo.NewMemoryMembershipRepository(func() time.Time { return now })
 	publisher := memory.NewMessagePublisher()
 	receipts := memory.NewReceiptRepository(func() time.Time { return now })
 
@@ -68,7 +69,7 @@ func TestSendChat_PersistsAndPublishes(t *testing.T) {
 func TestSendChat_AllowsNilPublisher(t *testing.T) {
 	now := time.Date(2026, 1, 4, 10, 0, 0, 0, time.UTC)
 	messageRepo := memory.NewMessageRepository(func() time.Time { return now })
-	membershipRepo := memory.NewMembershipRepository(func() time.Time { return now })
+	membershipRepo := convrepo.NewMemoryMembershipRepository(func() time.Time { return now })
 	receipts := memory.NewReceiptRepository(func() time.Time { return now })
 
 	conversationID := uuid.New()
@@ -96,7 +97,7 @@ func TestSendChat_AllowsNilPublisher(t *testing.T) {
 func TestSendChat_ValidatesMembershipAndInput(t *testing.T) {
 	now := time.Now()
 	messageRepo := memory.NewMessageRepository(nil)
-	membershipRepo := memory.NewMembershipRepository(nil)
+	membershipRepo := convrepo.NewMemoryMembershipRepository(nil)
 	receipts := memory.NewReceiptRepository(nil)
 	svc := NewMessagingService(messageRepo, membershipRepo, nil, receipts, func() time.Time { return now })
 
@@ -162,7 +163,7 @@ func TestSendChat_ValidatesMembershipAndInput(t *testing.T) {
 func TestListHistoryAndReceipts(t *testing.T) {
 	now := time.Date(2026, 1, 4, 11, 0, 0, 0, time.UTC)
 	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
-	memberRepo := memory.NewMembershipRepository(func() time.Time { return now })
+	memberRepo := convrepo.NewMemoryMembershipRepository(func() time.Time { return now })
 	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
 	svc := NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now })
 

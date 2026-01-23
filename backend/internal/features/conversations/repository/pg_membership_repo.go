@@ -1,4 +1,4 @@
-package pg
+package repository
 
 import (
 	"context"
@@ -10,20 +10,21 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/fakhry/share-location/backend/internal/domain"
+	"github.com/fakhry/share-location/backend/internal/features/conversations/domain"
+	"github.com/fakhry/share-location/backend/internal/repo/pg"
 )
 
-// MembershipRepository implements repo.MembershipRepository using Postgres.
-type MembershipRepository struct {
-	DB  PgxPool
+// PgMembershipRepository implements repo.MembershipRepository using Postgres.
+type PgMembershipRepository struct {
+	DB  pg.PgxPool
 	now func() time.Time
 }
 
-func NewMembershipRepository(db PgxPool, now func() time.Time) *MembershipRepository {
-	return &MembershipRepository{DB: db, now: now}
+func NewPgMembershipRepository(db pg.PgxPool, now func() time.Time) *PgMembershipRepository {
+	return &PgMembershipRepository{DB: db, now: now}
 }
 
-func (r *MembershipRepository) Add(ctx context.Context, members []domain.ConversationMember) error {
+func (r *PgMembershipRepository) Add(ctx context.Context, members []domain.ConversationMember) error {
 	if len(members) == 0 {
 		return nil
 	}
@@ -48,7 +49,7 @@ func (r *MembershipRepository) Add(ctx context.Context, members []domain.Convers
 	return err
 }
 
-func (r *MembershipRepository) IsMember(ctx context.Context, conversationID, userID uuid.UUID) (bool, error) {
+func (r *PgMembershipRepository) IsMember(ctx context.Context, conversationID, userID uuid.UUID) (bool, error) {
 	const query = `SELECT 1 FROM conversation_members WHERE conversation_id=$1 AND user_id=$2 LIMIT 1`
 	var dummy int
 	if err := r.DB.QueryRow(ctx, query, conversationID, userID).Scan(&dummy); err != nil {
@@ -60,7 +61,7 @@ func (r *MembershipRepository) IsMember(ctx context.Context, conversationID, use
 	return true, nil
 }
 
-func (r *MembershipRepository) ListByConversation(ctx context.Context, conversationID uuid.UUID) ([]domain.ConversationMember, error) {
+func (r *PgMembershipRepository) ListByConversation(ctx context.Context, conversationID uuid.UUID) ([]domain.ConversationMember, error) {
 	const query = `SELECT conversation_id, user_id, role, joined_at, last_read_message_id FROM conversation_members WHERE conversation_id=$1 ORDER BY joined_at`
 	rows, err := r.DB.Query(ctx, query, conversationID)
 	if err != nil {

@@ -1,4 +1,4 @@
-package httpserver
+package transport
 
 import (
 	"net/http"
@@ -7,11 +7,12 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
-	"github.com/fakhry/share-location/backend/internal/domain"
-	"github.com/fakhry/share-location/backend/internal/service"
+	convdomain "github.com/fakhry/share-location/backend/internal/features/conversations/domain"
+	convservice "github.com/fakhry/share-location/backend/internal/features/conversations/service"
+	legacyservice "github.com/fakhry/share-location/backend/internal/service"
 )
 
-func createConversationHandler(convs *service.ConversationService) fiber.Handler {
+func NewCreateConversationHandler(convs *convservice.ConversationService) fiber.Handler {
 	type request struct {
 		Type      string   `json:"type"`
 		Title     string   `json:"title"`
@@ -30,8 +31,8 @@ func createConversationHandler(convs *service.ConversationService) fiber.Handler
 		if err := c.BodyParser(&req); err != nil {
 			return fiber.ErrBadRequest
 		}
-		conv, members, err := convs.CreateConversation(c.Context(), service.CreateConversationRequest{
-			Type:                 domain.ConversationType(req.Type),
+		conv, members, err := convs.CreateConversation(c.Context(), convservice.CreateConversationRequest{
+			Type:                 convdomain.ConversationType(req.Type),
 			Title:                req.Title,
 			ParticipantUsernames: req.Usernames,
 		})
@@ -53,7 +54,7 @@ func createConversationHandler(convs *service.ConversationService) fiber.Handler
 	}
 }
 
-func listConversationsHandler(convs *service.ConversationService) fiber.Handler {
+func NewListConversationsHandler(convs *convservice.ConversationService) fiber.Handler {
 	type participant struct {
 		ID       string `json:"id"`
 		Username string `json:"username"`
@@ -120,7 +121,8 @@ func listConversationsHandler(convs *service.ConversationService) fiber.Handler 
 	}
 }
 
-func listMessagesHandler(msgs *service.MessagingService) fiber.Handler {
+// TODO: Move to messaging feature
+func NewListMessagesHandler(msgs *legacyservice.MessagingService) fiber.Handler {
 	type response struct {
 		ID             string         `json:"id"`
 		ConversationID string         `json:"conversation_id"`
@@ -158,7 +160,8 @@ func listMessagesHandler(msgs *service.MessagingService) fiber.Handler {
 	}
 }
 
-func receiptHandler(msgs *service.MessagingService) fiber.Handler {
+// TODO: Move to messaging feature
+func NewReceiptHandler(msgs *legacyservice.MessagingService) fiber.Handler {
 	type request struct {
 		UserID string `json:"user_id"`
 		Status string `json:"status"`
@@ -176,7 +179,7 @@ func receiptHandler(msgs *service.MessagingService) fiber.Handler {
 		if err != nil {
 			return fiber.ErrBadRequest
 		}
-		if err := msgs.UpsertReceipt(c.Context(), service.ReceiptRequest{
+		if err := msgs.UpsertReceipt(c.Context(), legacyservice.ReceiptRequest{
 			MessageID: msgID,
 			UserID:    userID,
 			Status:    req.Status,

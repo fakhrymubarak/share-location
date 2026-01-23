@@ -10,16 +10,16 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/fakhry/share-location/backend/internal/domain"
-	"github.com/fakhry/share-location/backend/internal/service"
+	convservice "github.com/fakhry/share-location/backend/internal/features/conversations/service"
 	"github.com/fakhry/share-location/backend/internal/shared/logging"
 )
 
 type broadcastHub interface {
-	BroadcastToConversation(ctx context.Context, convSvc *service.ConversationService, convID uuid.UUID, excludeConnID string, payload []byte)
+	BroadcastToConversation(ctx context.Context, convSvc *convservice.ConversationService, convID uuid.UUID, excludeConnID string, payload []byte)
 }
 
 // startRedisFanout subscribes to Redis channels and rebroadcasts to local connections.
-func startRedisFanout(ctx context.Context, client *redis.Client, hub broadcastHub, convSvc *service.ConversationService, logger *logging.Logger) {
+func startRedisFanout(ctx context.Context, client *redis.Client, hub broadcastHub, convSvc *convservice.ConversationService, logger *logging.Logger) {
 	if client == nil || hub == nil || convSvc == nil {
 		return
 	}
@@ -28,7 +28,7 @@ func startRedisFanout(ctx context.Context, client *redis.Client, hub broadcastHu
 	go subscribeLive(ctx, client, hub, convSvc, logger)
 }
 
-func subscribeMessages(ctx context.Context, client *redis.Client, hub broadcastHub, convSvc *service.ConversationService, logger *logging.Logger) {
+func subscribeMessages(ctx context.Context, client *redis.Client, hub broadcastHub, convSvc *convservice.ConversationService, logger *logging.Logger) {
 	pubsub := client.PSubscribe(ctx, "conv:*:messages")
 	defer pubsub.Close()
 	for {
@@ -49,7 +49,7 @@ func subscribeMessages(ctx context.Context, client *redis.Client, hub broadcastH
 	}
 }
 
-func subscribeLive(ctx context.Context, client *redis.Client, hub broadcastHub, convSvc *service.ConversationService, logger *logging.Logger) {
+func subscribeLive(ctx context.Context, client *redis.Client, hub broadcastHub, convSvc *convservice.ConversationService, logger *logging.Logger) {
 	pubsub := client.PSubscribe(ctx, "live:*")
 	defer pubsub.Close()
 	for {
@@ -73,7 +73,7 @@ func subscribeLive(ctx context.Context, client *redis.Client, hub broadcastHub, 
 	}
 }
 
-func broadcastChat(ctx context.Context, hub broadcastHub, convSvc *service.ConversationService, payload domain.Message) {
+func broadcastChat(ctx context.Context, hub broadcastHub, convSvc *convservice.ConversationService, payload domain.Message) {
 	out := map[string]any{
 		"event": "RECEIVE_CHAT",
 		"data": map[string]any{
@@ -90,7 +90,7 @@ func broadcastChat(ctx context.Context, hub broadcastHub, convSvc *service.Conve
 	hub.BroadcastToConversation(ctx, convSvc, payload.ConversationID, "", encoded)
 }
 
-func broadcastLive(ctx context.Context, hub broadcastHub, convSvc *service.ConversationService, payload domain.LiveLocationPoint) {
+func broadcastLive(ctx context.Context, hub broadcastHub, convSvc *convservice.ConversationService, payload domain.LiveLocationPoint) {
 	out := map[string]any{
 		"event": "SUBSCRIBE_LIVE_LOCATION",
 		"data": map[string]any{

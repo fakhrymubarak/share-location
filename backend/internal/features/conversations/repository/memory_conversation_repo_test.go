@@ -1,4 +1,4 @@
-package memory
+package repository
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 
 func TestConversationRepository_CreateAndLookup(t *testing.T) {
 	now := time.Date(2026, 1, 3, 9, 0, 0, 0, time.UTC)
-	r := NewConversationRepository(func() time.Time { return now })
+	r := NewMemoryConversationRepository(func() time.Time { return now })
 
 	conv, err := r.Create(context.Background(), domain.Conversation{
 		Type:          domain.ConversationTypeDirect,
@@ -45,7 +45,7 @@ func TestConversationRepository_CreateAndLookup(t *testing.T) {
 }
 
 func TestConversationRepository_NotFound(t *testing.T) {
-	r := NewConversationRepository(time.Now)
+	r := NewMemoryConversationRepository(time.Now)
 	if _, err := r.GetByID(context.Background(), uuid.New()); err != domain.ErrNotFound {
 		t.Fatalf("expected ErrNotFound, got %v", err)
 	}

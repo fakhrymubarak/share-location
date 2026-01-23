@@ -1,32 +1,32 @@
-package memory
+package repository
 
 import (
 	"context"
 	"sync"
 	"time"
 
-	"github.com/fakhry/share-location/backend/internal/domain"
+	"github.com/fakhry/share-location/backend/internal/features/conversations/domain"
 	"github.com/google/uuid"
 )
 
-type MembershipRepository struct {
+type MemoryMembershipRepository struct {
 	mu      sync.Mutex
 	members map[uuid.UUID]map[uuid.UUID]domain.ConversationMember
 	now     func() time.Time
 }
 
-// NewMembershipRepository returns an in-memory membership repository.
-func NewMembershipRepository(now func() time.Time) *MembershipRepository {
+// NewMemoryMembershipRepository returns an in-memory membership repository.
+func NewMemoryMembershipRepository(now func() time.Time) *MemoryMembershipRepository {
 	if now == nil {
 		now = time.Now
 	}
-	return &MembershipRepository{
+	return &MemoryMembershipRepository{
 		members: make(map[uuid.UUID]map[uuid.UUID]domain.ConversationMember),
 		now:     now,
 	}
 }
 
-func (r *MembershipRepository) Add(ctx context.Context, members []domain.ConversationMember) error {
+func (r *MemoryMembershipRepository) Add(ctx context.Context, members []domain.ConversationMember) error {
 	_ = ctx
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -45,7 +45,7 @@ func (r *MembershipRepository) Add(ctx context.Context, members []domain.Convers
 	return nil
 }
 
-func (r *MembershipRepository) IsMember(ctx context.Context, conversationID, userID uuid.UUID) (bool, error) {
+func (r *MemoryMembershipRepository) IsMember(ctx context.Context, conversationID, userID uuid.UUID) (bool, error) {
 	_ = ctx
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -57,7 +57,7 @@ func (r *MembershipRepository) IsMember(ctx context.Context, conversationID, use
 	return false, nil
 }
 
-func (r *MembershipRepository) ListByConversation(ctx context.Context, conversationID uuid.UUID) ([]domain.ConversationMember, error) {
+func (r *MemoryMembershipRepository) ListByConversation(ctx context.Context, conversationID uuid.UUID) ([]domain.ConversationMember, error) {
 	_ = ctx
 	r.mu.Lock()
 	defer r.mu.Unlock()

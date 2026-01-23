@@ -12,6 +12,8 @@ import (
 
 	authservice "github.com/fakhry/share-location/backend/internal/features/auth/service"
 	authtransport "github.com/fakhry/share-location/backend/internal/features/auth/transport"
+	convservice "github.com/fakhry/share-location/backend/internal/features/conversations/service"
+	convtransport "github.com/fakhry/share-location/backend/internal/features/conversations/transport"
 	"github.com/fakhry/share-location/backend/internal/service"
 	shareddomain "github.com/fakhry/share-location/backend/internal/shared/domain"
 	"github.com/fakhry/share-location/backend/internal/shared/logging"
@@ -21,7 +23,7 @@ import (
 // Deps aggregates services used by the HTTP/WebSocket layer.
 type Deps struct {
 	Users         *authservice.UserService
-	Conversations *service.ConversationService
+	Conversations *convservice.ConversationService
 	Messaging     *service.MessagingService
 	LiveLocation  *service.LiveLocationService
 	Connections   *registry.Registry
@@ -91,10 +93,10 @@ func New(deps Deps) *fiber.App {
 
 	app.Get("/health", func(c *fiber.Ctx) error { return c.SendStatus(http.StatusOK) })
 	app.Post("/v1/login", authtransport.NewLoginHandler(deps.Users))
-	app.Post("/v1/conversations", createConversationHandler(deps.Conversations))
-	app.Get("/v1/conversations", listConversationsHandler(deps.Conversations))
-	app.Get("/v1/conversations/:id/messages", listMessagesHandler(deps.Messaging))
-	app.Post("/v1/messages/:id/receipt", receiptHandler(deps.Messaging))
+	app.Post("/v1/conversations", convtransport.NewCreateConversationHandler(deps.Conversations))
+	app.Get("/v1/conversations", convtransport.NewListConversationsHandler(deps.Conversations))
+	app.Get("/v1/conversations/:id/messages", convtransport.NewListMessagesHandler(deps.Messaging))
+	app.Post("/v1/messages/:id/receipt", convtransport.NewReceiptHandler(deps.Messaging))
 	app.Post("/v1/live-locations", startLiveLocationHandler(deps.LiveLocation))
 
 	app.Use("/ws", websocket.New(wsHandlerWithDeps(deps)))
