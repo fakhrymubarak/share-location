@@ -1,11 +1,11 @@
-package pg
+package repository
 
 import (
 	"context"
 	"testing"
 	"time"
 
-	"github.com/fakhry/share-location/backend/internal/domain"
+	"github.com/fakhry/share-location/backend/internal/features/messaging/domain"
 	"github.com/google/uuid"
 	"github.com/pashagolub/pgxmock/v4"
 	"github.com/stretchr/testify/require"
@@ -16,8 +16,8 @@ func TestReceiptUpsert(t *testing.T) {
 	require.NoError(t, err)
 	defer mock.Close()
 
-	repo := NewReceiptRepository(mock)
-	rc := domain.DeliveryReceipt{
+	repo := NewPgReceiptRepository(mock)
+	rc := domain.Receipt{
 		MessageID: uuid.New(),
 		UserID:    uuid.New(),
 		Status:    "read",
@@ -37,7 +37,7 @@ func TestReceiptListByMessage(t *testing.T) {
 	require.NoError(t, err)
 	defer mock.Close()
 
-	repo := NewReceiptRepository(mock)
+	repo := NewPgReceiptRepository(mock)
 	msgID := uuid.New()
 	now := time.Now()
 

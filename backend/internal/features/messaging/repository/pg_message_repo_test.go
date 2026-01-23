@@ -1,4 +1,4 @@
-package pg
+package repository
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fakhry/share-location/backend/internal/domain"
+	"github.com/fakhry/share-location/backend/internal/features/messaging/domain"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/pashagolub/pgxmock/v4"
@@ -19,7 +19,7 @@ func TestMessageInsertOrGet_Insert(t *testing.T) {
 	defer mock.Close()
 
 	now := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
-	repo := NewMessageRepository(mock, func() time.Time { return now })
+	repo := NewPgMessageRepository(mock, func() time.Time { return now })
 
 	msg := domain.Message{
 		ConversationID: uuid.New(),
@@ -50,7 +50,7 @@ func TestMessageInsertOrGet_OnConflictFetchExisting(t *testing.T) {
 	defer mock.Close()
 
 	now := time.Now()
-	repo := NewMessageRepository(mock, func() time.Time { return now })
+	repo := NewPgMessageRepository(mock, func() time.Time { return now })
 
 	convID := uuid.New()
 	senderID := uuid.New()
@@ -81,12 +81,12 @@ func TestMessageInsertOrGet_OnConflictFetchExisting(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestMessageListByConversation(t *testing.T) {
+func TestMessageListHistory(t *testing.T) {
 	mock, err := pgxmock.NewPool()
 	require.NoError(t, err)
 	defer mock.Close()
 
-	repo := NewMessageRepository(mock, nil)
+	repo := NewPgMessageRepository(mock, nil)
 	convID := uuid.New()
 	bodyBytes, _ := json.Marshal(map[string]any{"text": "a"})
 	now := time.Now()
@@ -97,7 +97,7 @@ func TestMessageListByConversation(t *testing.T) {
 			AddRow(uuid.New(), convID, uuid.New(), bodyBytes, "text", "c1", now).
 			AddRow(uuid.New(), convID, uuid.New(), bodyBytes, "text", "c2", now))
 
-	msgs, err := repo.ListByConversation(context.Background(), convID, 2)
+	msgs, err := repo.ListHistory(context.Background(), convID, 2)
 	require.NoError(t, err)
 	require.Len(t, msgs, 2)
 	require.Equal(t, "c2", msgs[1].ClientMsgID)

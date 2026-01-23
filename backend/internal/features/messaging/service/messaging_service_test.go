@@ -7,21 +7,22 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/fakhry/share-location/backend/internal/domain"
+	convdomain "github.com/fakhry/share-location/backend/internal/features/conversations/domain"
 	convrepo "github.com/fakhry/share-location/backend/internal/features/conversations/repository"
-	"github.com/fakhry/share-location/backend/internal/repo/memory"
+	"github.com/fakhry/share-location/backend/internal/features/messaging/repository"
+	shareddomain "github.com/fakhry/share-location/backend/internal/shared/domain"
 )
 
 func TestSendChat_PersistsAndPublishes(t *testing.T) {
 	now := time.Date(2026, 1, 4, 9, 0, 0, 0, time.UTC)
-	messageRepo := memory.NewMessageRepository(func() time.Time { return now })
+	messageRepo := repository.NewMessageRepository(func() time.Time { return now })
 	membershipRepo := convrepo.NewMemoryMembershipRepository(func() time.Time { return now })
-	publisher := memory.NewMessagePublisher()
-	receipts := memory.NewReceiptRepository(func() time.Time { return now })
+	publisher := repository.NewMessagePublisher()
+	receipts := repository.NewReceiptRepository(func() time.Time { return now })
 
 	conversationID := uuid.New()
 	senderID := uuid.New()
-	_ = membershipRepo.Add(context.Background(), []domain.ConversationMember{
+	_ = membershipRepo.Add(context.Background(), []convdomain.ConversationMember{
 		{ConversationID: conversationID, UserID: senderID, Role: "member", JoinedAt: now},
 	})
 
@@ -68,13 +69,13 @@ func TestSendChat_PersistsAndPublishes(t *testing.T) {
 
 func TestSendChat_AllowsNilPublisher(t *testing.T) {
 	now := time.Date(2026, 1, 4, 10, 0, 0, 0, time.UTC)
-	messageRepo := memory.NewMessageRepository(func() time.Time { return now })
+	messageRepo := repository.NewMessageRepository(func() time.Time { return now })
 	membershipRepo := convrepo.NewMemoryMembershipRepository(func() time.Time { return now })
-	receipts := memory.NewReceiptRepository(func() time.Time { return now })
+	receipts := repository.NewReceiptRepository(func() time.Time { return now })
 
 	conversationID := uuid.New()
 	senderID := uuid.New()
-	_ = membershipRepo.Add(context.Background(), []domain.ConversationMember{
+	_ = membershipRepo.Add(context.Background(), []convdomain.ConversationMember{
 		{ConversationID: conversationID, UserID: senderID, Role: "member", JoinedAt: now},
 	})
 
@@ -96,9 +97,9 @@ func TestSendChat_AllowsNilPublisher(t *testing.T) {
 
 func TestSendChat_ValidatesMembershipAndInput(t *testing.T) {
 	now := time.Now()
-	messageRepo := memory.NewMessageRepository(nil)
+	messageRepo := repository.NewMessageRepository(nil)
 	membershipRepo := convrepo.NewMemoryMembershipRepository(nil)
-	receipts := memory.NewReceiptRepository(nil)
+	receipts := repository.NewReceiptRepository(nil)
 	svc := NewMessagingService(messageRepo, membershipRepo, nil, receipts, func() time.Time { return now })
 
 	conversationID := uuid.New()
@@ -111,7 +112,7 @@ func TestSendChat_ValidatesMembershipAndInput(t *testing.T) {
 		MessageType:    "text",
 		ClientMsgID:    "c1",
 	})
-	if err != domain.ErrForbidden {
+	if err != shareddomain.ErrForbidden {
 		t.Fatalf("expected ErrForbidden for non-member, got %v", err)
 	}
 
@@ -122,7 +123,7 @@ func TestSendChat_ValidatesMembershipAndInput(t *testing.T) {
 		MessageType:    "text",
 		ClientMsgID:    "",
 	})
-	if err != domain.ErrInvalidInput {
+	if err != shareddomain.ErrInvalidInput {
 		t.Fatalf("expected ErrInvalidInput for missing fields, got %v", err)
 	}
 
@@ -133,7 +134,7 @@ func TestSendChat_ValidatesMembershipAndInput(t *testing.T) {
 		MessageType:    "text",
 		ClientMsgID:    "c2",
 	})
-	if err != domain.ErrInvalidInput {
+	if err != shareddomain.ErrInvalidInput {
 		t.Fatalf("expected ErrInvalidInput for nil body, got %v", err)
 	}
 
@@ -144,7 +145,7 @@ func TestSendChat_ValidatesMembershipAndInput(t *testing.T) {
 		MessageType:    " ",
 		ClientMsgID:    "c3",
 	})
-	if err != domain.ErrInvalidInput {
+	if err != shareddomain.ErrInvalidInput {
 		t.Fatalf("expected ErrInvalidInput for blank message type, got %v", err)
 	}
 
@@ -155,21 +156,21 @@ func TestSendChat_ValidatesMembershipAndInput(t *testing.T) {
 		MessageType:    "unsupported",
 		ClientMsgID:    "c4",
 	})
-	if err != domain.ErrInvalidInput {
+	if err != shareddomain.ErrInvalidInput {
 		t.Fatalf("expected ErrInvalidInput for unsupported message type, got %v", err)
 	}
 }
 
 func TestListHistoryAndReceipts(t *testing.T) {
 	now := time.Date(2026, 1, 4, 11, 0, 0, 0, time.UTC)
-	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
+	msgRepo := repository.NewMessageRepository(func() time.Time { return now })
 	memberRepo := convrepo.NewMemoryMembershipRepository(func() time.Time { return now })
-	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
+	rcRepo := repository.NewReceiptRepository(func() time.Time { return now })
 	svc := NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now })
 
 	convID := uuid.New()
 	sender := uuid.New()
-	_ = memberRepo.Add(context.Background(), []domain.ConversationMember{
+	_ = memberRepo.Add(context.Background(), []convdomain.ConversationMember{
 		{ConversationID: convID, UserID: sender, Role: "member", JoinedAt: now},
 	})
 

@@ -114,8 +114,14 @@ func (r *PgConversationRepository) ListByUser(ctx context.Context, userID uuid.U
 	for rows.Next() {
 		var c domain.Conversation
 		var lastMsgBytes []byte
-		if err := rows.Scan(&c.ID, &c.Type, &c.Title, &c.DirectPairKey, &c.CreatedAt, &c.Participants, &lastMsgBytes); err != nil {
+		var partsBytes []byte
+		if err := rows.Scan(&c.ID, &c.Type, &c.Title, &c.DirectPairKey, &c.CreatedAt, &partsBytes, &lastMsgBytes); err != nil {
 			return nil, err
+		}
+		if len(partsBytes) > 0 {
+			if err := json.Unmarshal(partsBytes, &c.Participants); err != nil {
+				return nil, err
+			}
 		}
 		if len(lastMsgBytes) > 0 {
 			var msg domain.ConversationMessage

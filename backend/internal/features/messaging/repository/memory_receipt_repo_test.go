@@ -1,12 +1,12 @@
-package memory
+package repository
 
 import (
 	"context"
 	"testing"
 	"time"
 
+	"github.com/fakhry/share-location/backend/internal/features/messaging/domain"
 	"github.com/google/uuid"
-	"github.com/fakhry/share-location/backend/internal/domain"
 )
 
 func TestReceiptRepository_UpsertAndList(t *testing.T) {
@@ -17,7 +17,7 @@ func TestReceiptRepository_UpsertAndList(t *testing.T) {
 	userA := uuid.New()
 	userB := uuid.New()
 
-	err := r.Upsert(context.Background(), domain.DeliveryReceipt{
+	err := r.Upsert(context.Background(), domain.Receipt{
 		MessageID: msgID,
 		UserID:    userA,
 		Status:    "delivered",
@@ -25,7 +25,7 @@ func TestReceiptRepository_UpsertAndList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Upsert error: %v", err)
 	}
-	err = r.Upsert(context.Background(), domain.DeliveryReceipt{
+	err = r.Upsert(context.Background(), domain.Receipt{
 		MessageID: msgID,
 		UserID:    userB,
 		Status:    "read",

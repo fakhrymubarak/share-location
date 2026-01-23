@@ -7,19 +7,24 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/fakhry/share-location/backend/internal/domain"
-	"github.com/fakhry/share-location/backend/internal/repo"
+	convdomain "github.com/fakhry/share-location/backend/internal/features/conversations/domain"
+	"github.com/fakhry/share-location/backend/internal/features/messaging/domain"
+	shareddomain "github.com/fakhry/share-location/backend/internal/shared/domain"
 )
 
+type MessagePublisher interface {
+	Publish(ctx context.Context, msg domain.Message) error
+}
+
 type MessagingService struct {
-	Messages    repo.MessageRepository
-	Memberships repo.MembershipRepository
-	Publisher   repo.MessagePublisher
-	Receipts    repo.ReceiptRepository
+	Messages    domain.MessageRepository
+	Memberships convdomain.MembershipRepository
+	Publisher   MessagePublisher
+	Receipts    domain.ReceiptRepository
 	now         func() time.Time
 }
 
-func NewMessagingService(messages repo.MessageRepository, memberships repo.MembershipRepository, publisher repo.MessagePublisher, receipts repo.ReceiptRepository, now func() time.Time) *MessagingService {
+func NewMessagingService(messages domain.MessageRepository, memberships convdomain.MembershipRepository, publisher MessagePublisher, receipts domain.ReceiptRepository, now func() time.Time) *MessagingService {
 	if now == nil {
 		now = time.Now
 	}
@@ -52,10 +57,11 @@ func (s *MessagingService) SendChat(ctx context.Context, req SendChatRequest) (d
 		return domain.Message{}, false, err
 	}
 	if !isMember {
-		return domain.Message{}, false, domain.ErrForbidden
+		return domain.Message{}, false, shareddomain.ErrForbidden
 	}
 
 	msg := domain.Message{
+		ID:             uuid.New(),
 		ConversationID: req.ConversationID,
 		SenderID:       req.SenderID,
 		Body:           req.Body,
@@ -69,7 +75,7 @@ func (s *MessagingService) SendChat(ctx context.Context, req SendChatRequest) (d
 		return domain.Message{}, false, err
 	}
 	if created && s.Publisher != nil {
-		if err := s.Publisher.PublishMessage(ctx, stored); err != nil {
+		if err := s.Publisher.Publish(ctx, stored); err != nil {
 			return domain.Message{}, false, err
 		}
 	}
@@ -79,12 +85,12 @@ func (s *MessagingService) SendChat(ctx context.Context, req SendChatRequest) (d
 // ListHistory returns ordered messages for a conversation limited by count.
 func (s *MessagingService) ListHistory(ctx context.Context, conversationID uuid.UUID, limit int) ([]domain.Message, error) {
 	if conversationID == uuid.Nil {
-		return nil, domain.ErrInvalidInput
+		return nil, shareddomain.ErrInvalidInput
 	}
 	if limit <= 0 {
 		limit = 50
 	}
-	return s.Messages.ListByConversation(ctx, conversationID, limit)
+	return s.Messages.ListHistory(ctx, conversationID, limit)
 }
 
 type ReceiptRequest struct {
@@ -96,9 +102,9 @@ type ReceiptRequest struct {
 // UpsertReceipt records delivery/read status.
 func (s *MessagingService) UpsertReceipt(ctx context.Context, req ReceiptRequest) error {
 	if req.MessageID == uuid.Nil || req.UserID == uuid.Nil || strings.TrimSpace(req.Status) == "" {
-		return domain.ErrInvalidInput
+		return shareddomain.ErrInvalidInput
 	}
-	receipt := domain.DeliveryReceipt{
+	receipt := domain.Receipt{
 		MessageID: req.MessageID,
 		UserID:    req.UserID,
 		Status:    req.Status,
@@ -109,13 +115,13 @@ func (s *MessagingService) UpsertReceipt(ctx context.Context, req ReceiptRequest
 
 func validateSendChat(req SendChatRequest) error {
 	if req.ConversationID == uuid.Nil || req.SenderID == uuid.Nil {
-		return domain.ErrInvalidInput
+		return shareddomain.ErrInvalidInput
 	}
 	if strings.TrimSpace(req.ClientMsgID) == "" || !isSupportedMessageType(req.MessageType) {
-		return domain.ErrInvalidInput
+		return shareddomain.ErrInvalidInput
 	}
 	if req.Body == nil {
-		return domain.ErrInvalidInput
+		return shareddomain.ErrInvalidInput
 	}
 	return nil
 }

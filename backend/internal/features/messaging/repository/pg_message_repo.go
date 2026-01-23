@@ -1,4 +1,4 @@
-package pg
+package repository
 
 import (
 	"context"
@@ -8,21 +8,28 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/fakhry/share-location/backend/internal/domain"
+	"github.com/fakhry/share-location/backend/internal/features/messaging/domain"
 )
 
-// MessageRepository implements repo.MessageRepository using Postgres.
-type MessageRepository struct {
+type PgxPool interface {
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+// PgMessageRepository implements domain.MessageRepository using Postgres.
+type PgMessageRepository struct {
 	DB  PgxPool
 	now func() time.Time
 }
 
-func NewMessageRepository(db PgxPool, now func() time.Time) *MessageRepository {
-	return &MessageRepository{DB: db, now: now}
+func NewPgMessageRepository(db PgxPool, now func() time.Time) *PgMessageRepository {
+	return &PgMessageRepository{DB: db, now: now}
 }
 
-func (r *MessageRepository) InsertOrGet(ctx context.Context, msg domain.Message) (domain.Message, bool, error) {
+func (r *PgMessageRepository) InsertOrGet(ctx context.Context, msg domain.Message) (domain.Message, bool, error) {
 	if msg.ID == uuid.Nil {
 		msg.ID = uuid.New()
 	}
@@ -59,7 +66,7 @@ RETURNING id, conversation_id, sender_id, body, message_type, client_msg_id, cre
 	}
 }
 
-func (r *MessageRepository) fetchExisting(ctx context.Context, conversationID, senderID uuid.UUID, clientMsgID string) (domain.Message, error) {
+func (r *PgMessageRepository) fetchExisting(ctx context.Context, conversationID, senderID uuid.UUID, clientMsgID string) (domain.Message, error) {
 	const selectQuery = `
 SELECT id, conversation_id, sender_id, body, message_type, client_msg_id, created_at
 FROM messages
@@ -76,7 +83,7 @@ WHERE conversation_id=$1 AND sender_id=$2 AND client_msg_id=$3`
 	return msg, nil
 }
 
-func (r *MessageRepository) ListByConversation(ctx context.Context, conversationID uuid.UUID, limit int) ([]domain.Message, error) {
+func (r *PgMessageRepository) ListHistory(ctx context.Context, conversationID uuid.UUID, limit int) ([]domain.Message, error) {
 	if limit <= 0 {
 		limit = 50
 	}
@@ -105,4 +112,11 @@ LIMIT $2`
 		msgs = append(msgs, msg)
 	}
 	return msgs, rows.Err()
+}
+
+func nowOr(f func() time.Time, fallback time.Time) time.Time {
+	if f != nil {
+		return f()
+	}
+	return fallback
 }

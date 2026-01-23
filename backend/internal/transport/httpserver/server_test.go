@@ -21,6 +21,8 @@ import (
 	convdomain "github.com/fakhry/share-location/backend/internal/features/conversations/domain"
 	convrepo "github.com/fakhry/share-location/backend/internal/features/conversations/repository"
 	convservice "github.com/fakhry/share-location/backend/internal/features/conversations/service"
+	msgrepo "github.com/fakhry/share-location/backend/internal/features/messaging/repository"
+	msgservice "github.com/fakhry/share-location/backend/internal/features/messaging/service"
 	"github.com/fakhry/share-location/backend/internal/repo/memory"
 	"github.com/fakhry/share-location/backend/internal/service"
 	shareddomain "github.com/fakhry/share-location/backend/internal/shared/domain"
@@ -31,9 +33,9 @@ func TestLoginAndConversationEndpoints(t *testing.T) {
 	usersRepo := authrepo.NewMemoryUserRepository(func() time.Time { return now })
 	convRepo := convrepo.NewMemoryConversationRepository(func() time.Time { return now })
 	memberRepo := convrepo.NewMemoryMembershipRepository(func() time.Time { return now })
-	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
-	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
-	msgSvc := service.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now })
+	msgRepo := msgrepo.NewMessageRepository(func() time.Time { return now })
+	rcRepo := msgrepo.NewReceiptRepository(func() time.Time { return now })
+	msgSvc := msgservice.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now })
 	convSvc := convservice.NewConversationService(usersRepo, convRepo, memberRepo, func() time.Time { return now })
 	liveSvc := service.NewLiveLocationService(memory.NewLiveLocationRepository(func() time.Time { return now }), memberRepo, memory.NewLiveLocationPublisher(), 15*time.Minute, func() time.Time { return now })
 
@@ -85,7 +87,7 @@ func TestLoginAndConversationEndpoints(t *testing.T) {
 
 	// Seed messages via service.
 	for _, cID := range []string{"c1", "c2"} {
-		_, _, err := msgSvc.SendChat(context.Background(), service.SendChatRequest{
+		_, _, err := msgSvc.SendChat(context.Background(), msgservice.SendChatRequest{
 			ConversationID: uuid.MustParse(convID),
 			SenderID:       alice.ID,
 			Body:           map[string]any{"text": cID},
@@ -95,6 +97,20 @@ func TestLoginAndConversationEndpoints(t *testing.T) {
 		if err != nil {
 			t.Fatalf("SendChat seed error: %v", err)
 		}
+	}
+
+	req = httptest.NewRequest("GET", "/v1/conversations?user_id="+alice.ID.String(), nil)
+	resp, err = app.Test(req)
+	if err != nil {
+		t.Fatalf("list conversations request failed: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("list conversations status = %d", resp.StatusCode)
+	}
+	var listResp []map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&listResp)
+	if len(listResp) != 1 {
+		t.Fatalf("expected 1 conversation, got %d", len(listResp))
 	}
 
 	req = httptest.NewRequest("GET", "/v1/conversations/"+convID+"/messages?limit=10", nil)
@@ -157,14 +173,14 @@ func TestHandlers_ReturnValidationErrors(t *testing.T) {
 	usersRepo := authrepo.NewMemoryUserRepository(func() time.Time { return now })
 	convRepo := convrepo.NewMemoryConversationRepository(func() time.Time { return now })
 	memberRepo := convrepo.NewMemoryMembershipRepository(func() time.Time { return now })
-	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
-	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
+	msgRepo := msgrepo.NewMessageRepository(func() time.Time { return now })
+	rcRepo := msgrepo.NewReceiptRepository(func() time.Time { return now })
 	liveSvc := service.NewLiveLocationService(memory.NewLiveLocationRepository(func() time.Time { return now }), memberRepo, memory.NewLiveLocationPublisher(), 15*time.Minute, func() time.Time { return now })
 
 	app := New(Deps{
 		Users:         authservice.NewUserService(usersRepo),
 		Conversations: convservice.NewConversationService(usersRepo, convRepo, memberRepo, func() time.Time { return now }),
-		Messaging:     service.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now }),
+		Messaging:     msgservice.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now }),
 		LiveLocation:  liveSvc,
 	})
 
@@ -208,14 +224,14 @@ func TestWebSocketHandshake(t *testing.T) {
 	usersRepo := authrepo.NewMemoryUserRepository(func() time.Time { return now })
 	convRepo := convrepo.NewMemoryConversationRepository(func() time.Time { return now })
 	memberRepo := convrepo.NewMemoryMembershipRepository(func() time.Time { return now })
-	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
-	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
+	msgRepo := msgrepo.NewMessageRepository(func() time.Time { return now })
+	rcRepo := msgrepo.NewReceiptRepository(func() time.Time { return now })
 	liveSvc := service.NewLiveLocationService(memory.NewLiveLocationRepository(func() time.Time { return now }), memberRepo, memory.NewLiveLocationPublisher(), 15*time.Minute, func() time.Time { return now })
 
 	app := New(Deps{
 		Users:         authservice.NewUserService(usersRepo),
 		Conversations: convservice.NewConversationService(usersRepo, convRepo, memberRepo, func() time.Time { return now }),
-		Messaging:     service.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now }),
+		Messaging:     msgservice.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now }),
 		LiveLocation:  liveSvc,
 	})
 
@@ -250,6 +266,13 @@ func TestWebSocketHandshake(t *testing.T) {
 	if payload.Event != "CONNECTED" || payload.Data.Username != "carol" || payload.Data.UserID == "" {
 		t.Fatalf("unexpected payload %+v", payload)
 	}
+
+	// Send Pong to trigger heartbeat
+	if err := conn.WriteMessage(websocket.PongMessage, nil); err != nil {
+		t.Fatalf("write pong error: %v", err)
+	}
+	// Give it a moment to process
+	time.Sleep(50 * time.Millisecond)
 }
 
 func TestWebSocketHandshakeInvalidUsername(t *testing.T) {
@@ -257,14 +280,14 @@ func TestWebSocketHandshakeInvalidUsername(t *testing.T) {
 	usersRepo := authrepo.NewMemoryUserRepository(func() time.Time { return now })
 	convRepo := convrepo.NewMemoryConversationRepository(func() time.Time { return now })
 	memberRepo := convrepo.NewMemoryMembershipRepository(func() time.Time { return now })
-	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
-	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
+	msgRepo := msgrepo.NewMessageRepository(func() time.Time { return now })
+	rcRepo := msgrepo.NewReceiptRepository(func() time.Time { return now })
 	liveSvc := service.NewLiveLocationService(memory.NewLiveLocationRepository(func() time.Time { return now }), memberRepo, memory.NewLiveLocationPublisher(), 15*time.Minute, func() time.Time { return now })
 
 	app := New(Deps{
 		Users:         authservice.NewUserService(usersRepo),
 		Conversations: convservice.NewConversationService(usersRepo, convRepo, memberRepo, func() time.Time { return now }),
-		Messaging:     service.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now }),
+		Messaging:     msgservice.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now }),
 		LiveLocation:  liveSvc,
 	})
 
@@ -300,12 +323,12 @@ func TestWebSocketSendChat(t *testing.T) {
 	usersRepo := authrepo.NewMemoryUserRepository(func() time.Time { return now })
 	convRepo := convrepo.NewMemoryConversationRepository(func() time.Time { return now })
 	memberRepo := convrepo.NewMemoryMembershipRepository(func() time.Time { return now })
-	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
-	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
+	msgRepo := msgrepo.NewMessageRepository(func() time.Time { return now })
+	rcRepo := msgrepo.NewReceiptRepository(func() time.Time { return now })
 	liveSvc := service.NewLiveLocationService(memory.NewLiveLocationRepository(func() time.Time { return now }), memberRepo, memory.NewLiveLocationPublisher(), 15*time.Minute, func() time.Time { return now })
 
 	convSvc := convservice.NewConversationService(usersRepo, convRepo, memberRepo, func() time.Time { return now })
-	msgSvc := service.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now })
+	msgSvc := msgservice.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now })
 	app := New(Deps{
 		Users:         authservice.NewUserService(usersRepo),
 		Conversations: convSvc,
@@ -371,12 +394,12 @@ func TestWebSocketSendChatBroadcastsToOtherUser(t *testing.T) {
 	usersRepo := authrepo.NewMemoryUserRepository(func() time.Time { return now })
 	convRepo := convrepo.NewMemoryConversationRepository(func() time.Time { return now })
 	memberRepo := convrepo.NewMemoryMembershipRepository(func() time.Time { return now })
-	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
-	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
+	msgRepo := msgrepo.NewMessageRepository(func() time.Time { return now })
+	rcRepo := msgrepo.NewReceiptRepository(func() time.Time { return now })
 	liveSvc := service.NewLiveLocationService(memory.NewLiveLocationRepository(func() time.Time { return now }), memberRepo, memory.NewLiveLocationPublisher(), 15*time.Minute, func() time.Time { return now })
 
 	convSvc := convservice.NewConversationService(usersRepo, convRepo, memberRepo, func() time.Time { return now })
-	msgSvc := service.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now })
+	msgSvc := msgservice.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now })
 	app := New(Deps{
 		Users:         authservice.NewUserService(usersRepo),
 		Conversations: convSvc,
@@ -451,12 +474,12 @@ func TestWebSocketSendChatInvalidConversation(t *testing.T) {
 	usersRepo := authrepo.NewMemoryUserRepository(func() time.Time { return now })
 	convRepo := convrepo.NewMemoryConversationRepository(func() time.Time { return now })
 	memberRepo := convrepo.NewMemoryMembershipRepository(func() time.Time { return now })
-	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
-	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
+	msgRepo := msgrepo.NewMessageRepository(func() time.Time { return now })
+	rcRepo := msgrepo.NewReceiptRepository(func() time.Time { return now })
 	app := New(Deps{
 		Users:         authservice.NewUserService(usersRepo),
 		Conversations: convservice.NewConversationService(usersRepo, convRepo, memberRepo, func() time.Time { return now }),
-		Messaging:     service.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now }),
+		Messaging:     msgservice.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now }),
 		LiveLocation:  service.NewLiveLocationService(memory.NewLiveLocationRepository(func() time.Time { return now }), memberRepo, memory.NewLiveLocationPublisher(), 15*time.Minute, func() time.Time { return now }),
 	})
 
@@ -512,13 +535,13 @@ func TestWebSocketPublishLiveLocation(t *testing.T) {
 	usersRepo := authrepo.NewMemoryUserRepository(func() time.Time { return now })
 	convRepo := convrepo.NewMemoryConversationRepository(func() time.Time { return now })
 	memberRepo := convrepo.NewMemoryMembershipRepository(func() time.Time { return now })
-	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
-	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
+	msgRepo := msgrepo.NewMessageRepository(func() time.Time { return now })
+	rcRepo := msgrepo.NewReceiptRepository(func() time.Time { return now })
 	liveRepo := memory.NewLiveLocationRepository(func() time.Time { return now })
 	livePub := memory.NewLiveLocationPublisher()
 
 	convSvc := convservice.NewConversationService(usersRepo, convRepo, memberRepo, func() time.Time { return now })
-	msgSvc := service.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now })
+	msgSvc := msgservice.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now })
 	liveSvc := service.NewLiveLocationService(liveRepo, memberRepo, livePub, 15*time.Minute, func() time.Time { return now })
 	app := New(Deps{
 		Users:         authservice.NewUserService(usersRepo),
@@ -618,12 +641,12 @@ func TestWebSocketSubscribeInvalidStream(t *testing.T) {
 	usersRepo := authrepo.NewMemoryUserRepository(func() time.Time { return now })
 	convRepo := convrepo.NewMemoryConversationRepository(func() time.Time { return now })
 	memberRepo := convrepo.NewMemoryMembershipRepository(func() time.Time { return now })
-	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
-	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
+	msgRepo := msgrepo.NewMessageRepository(func() time.Time { return now })
+	rcRepo := msgrepo.NewReceiptRepository(func() time.Time { return now })
 	app := New(Deps{
 		Users:         authservice.NewUserService(usersRepo),
 		Conversations: convservice.NewConversationService(usersRepo, convRepo, memberRepo, func() time.Time { return now }),
-		Messaging:     service.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now }),
+		Messaging:     msgservice.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now }),
 		LiveLocation:  service.NewLiveLocationService(memory.NewLiveLocationRepository(func() time.Time { return now }), memberRepo, memory.NewLiveLocationPublisher(), 15*time.Minute, func() time.Time { return now }),
 	})
 
@@ -661,13 +684,13 @@ func TestWebSocketPublishLiveLocationMissingSession(t *testing.T) {
 	usersRepo := authrepo.NewMemoryUserRepository(func() time.Time { return now })
 	convRepo := convrepo.NewMemoryConversationRepository(func() time.Time { return now })
 	memberRepo := convrepo.NewMemoryMembershipRepository(func() time.Time { return now })
-	msgRepo := memory.NewMessageRepository(func() time.Time { return now })
-	rcRepo := memory.NewReceiptRepository(func() time.Time { return now })
+	msgRepo := msgrepo.NewMessageRepository(func() time.Time { return now })
+	rcRepo := msgrepo.NewReceiptRepository(func() time.Time { return now })
 	liveRepo := memory.NewLiveLocationRepository(func() time.Time { return now })
 	app := New(Deps{
 		Users:         authservice.NewUserService(usersRepo),
 		Conversations: convservice.NewConversationService(usersRepo, convRepo, memberRepo, func() time.Time { return now }),
-		Messaging:     service.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now }),
+		Messaging:     msgservice.NewMessagingService(msgRepo, memberRepo, nil, rcRepo, func() time.Time { return now }),
 		LiveLocation:  service.NewLiveLocationService(liveRepo, memberRepo, memory.NewLiveLocationPublisher(), 15*time.Minute, func() time.Time { return now }),
 	})
 

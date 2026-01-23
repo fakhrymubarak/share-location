@@ -93,6 +93,49 @@ func TestCreateGroupConversation(t *testing.T) {
 	}
 }
 
+func TestListConversations(t *testing.T) {
+	now := time.Date(2026, 1, 3, 12, 0, 0, 0, time.UTC)
+	users := authrepo.NewMemoryUserRepository(func() time.Time { return now })
+	convs := convrepo.NewMemoryConversationRepository(func() time.Time { return now })
+	members := convrepo.NewMemoryMembershipRepository(func() time.Time { return now })
+	svc := NewConversationService(users, convs, members, func() time.Time { return now })
+
+	// Create a conversation for alice and bob
+	_, _, err := svc.CreateConversation(context.Background(), CreateConversationRequest{
+		Type:                 convdomain.ConversationTypeDirect,
+		ParticipantUsernames: []string{"alice", "bob"},
+	})
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	alice, _ := users.GetByUsername(context.Background(), "alice")
+	list, err := svc.ListConversations(context.Background(), alice.ID)
+	if err != nil {
+		t.Fatalf("ListConversations error: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("expected 1 conversation, got %d", len(list))
+	}
+	if list[0].Participants == nil {
+		t.Fatalf("expected populated participants in list")
+	}
+
+	bob, _ := users.GetByUsername(context.Background(), "bob")
+	listBob, err := svc.ListConversations(context.Background(), bob.ID)
+	if err != nil {
+		t.Fatalf("ListConversations bob error: %v", err)
+	}
+	if len(listBob) != 1 {
+		t.Fatalf("expected bob to also verify conversation")
+	}
+
+	// Verify error on invalid input
+	if _, err := svc.ListConversations(context.Background(), uuid.Nil); !errors.Is(err, shareddomain.ErrInvalidInput) {
+		t.Fatalf("expected ErrInvalidInput, got %v", err)
+	}
+}
+
 func TestCreateDirectConversation_RequiresTwoUniqueParticipants(t *testing.T) {
 	users := authrepo.NewMemoryUserRepository(time.Now)
 	convs := convrepo.NewMemoryConversationRepository(time.Now)

@@ -108,6 +108,9 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 
 // ListConversations returns all conversations for a user.
 func (s *ConversationService) ListConversations(ctx context.Context, userID uuid.UUID) ([]convdomain.Conversation, error) {
+	if userID == uuid.Nil {
+		return nil, shareddomain.ErrInvalidInput
+	}
 	return s.Conversations.ListByUser(ctx, userID)
 }
 

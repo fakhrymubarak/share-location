@@ -1,11 +1,11 @@
-package memory
+package repository
 
 import (
 	"context"
 	"testing"
 	"time"
 
-	"github.com/fakhry/share-location/backend/internal/domain"
+	"github.com/fakhry/share-location/backend/internal/features/messaging/domain"
 	"github.com/google/uuid"
 )
 
@@ -50,9 +50,9 @@ func TestMessageRepository_InsertOrGetAndList(t *testing.T) {
 	msg2.CreatedAt = now.Add(time.Minute)
 	_, _, _ = r.InsertOrGet(context.Background(), msg2)
 
-	list, err := r.ListByConversation(context.Background(), convID, 1)
+	list, err := r.ListHistory(context.Background(), convID, 1)
 	if err != nil {
-		t.Fatalf("ListByConversation error: %v", err)
+		t.Fatalf("ListHistory error: %v", err)
 	}
 	if len(list) != 1 || list[0].ClientMsgID != "c1" {
 		t.Fatalf("expected ordered list with first message, got %+v", list)

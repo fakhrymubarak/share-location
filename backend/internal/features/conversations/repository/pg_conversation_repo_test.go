@@ -2,10 +2,12 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
-	"github.com/fakhry/share-location/backend/internal/domain"
+	"github.com/fakhry/share-location/backend/internal/features/conversations/domain"
+	shareddomain "github.com/fakhry/share-location/backend/internal/shared/domain"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/pashagolub/pgxmock/v4"
@@ -90,6 +92,39 @@ func TestConversationFindByDirectPairKey_NotFound(t *testing.T) {
 		WillReturnError(pgx.ErrNoRows)
 
 	_, err = repo.FindByDirectPairKey(context.Background(), "missing")
-	require.ErrorIs(t, err, domain.ErrNotFound)
+	require.ErrorIs(t, err, shareddomain.ErrNotFound)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestConversationListByUser(t *testing.T) {
+	mock, err := pgxmock.NewPool()
+	require.NoError(t, err)
+	defer mock.Close()
+
+	repo := NewPgConversationRepository(mock, nil)
+	userID := uuid.New()
+	now := time.Now()
+	convID := uuid.New()
+
+	// JSON encoded participants
+	parts := []domain.Participant{
+		{ID: userID, Username: "alice"},
+	}
+	partsJSON, _ := json.Marshal(parts)
+	// Last message can be null (empty bytes or nil)
+	lastMsg := []byte("null") // or valid json
+
+	mock.ExpectQuery(`SELECT c.id, c.type, c.title, c.direct_pair_key, c.created_at, COALESCE`).
+		WithArgs(userID).
+		WillReturnRows(pgxmock.NewRows([]string{"id", "type", "title", "direct_pair_key", "created_at", "participants", "last_message"}).
+			AddRow(convID, domain.ConversationTypeDirect, "", "a:b", now, partsJSON, lastMsg))
+
+	list, err := repo.ListByUser(context.Background(), userID)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	require.Equal(t, convID, list[0].ID)
+	require.Len(t, list[0].Participants, 1)
+	require.Equal(t, "alice", list[0].Participants[0].Username)
+
 	require.NoError(t, mock.ExpectationsWereMet())
 }

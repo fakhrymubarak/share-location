@@ -9,17 +9,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
-	authservice "github.com/fakhry/share-location/backend/internal/features/auth/service"
+	msgservice "github.com/fakhry/share-location/backend/internal/features/messaging/service"
 	"github.com/fakhry/share-location/backend/internal/service"
 )
-
-func wsHandler(users *authservice.UserService, messaging *service.MessagingService, live *service.LiveLocationService) func(*websocket.Conn) {
-	return wsHandlerWithDeps(Deps{
-		Users:        users,
-		Messaging:    messaging,
-		LiveLocation: live,
-	})
-}
 
 func wsHandlerWithDeps(deps Deps) func(*websocket.Conn) {
 	hub := deps.Hub
@@ -132,7 +124,7 @@ func wsHandlerWithDeps(deps Deps) func(*websocket.Conn) {
 					userLog.WithFields(logrus.Fields{"event": "send_chat", "conversation_id": req.ConversationID}).Warnf("invalid conversation id: %v", err)
 					continue
 				}
-				msgRes, _, err := deps.Messaging.SendChat(context.Background(), service.SendChatRequest{
+				msgRes, _, err := deps.Messaging.SendChat(context.Background(), msgservice.SendChatRequest{
 					ConversationID: convID,
 					SenderID:       user.ID,
 					Body:           req.Body,
