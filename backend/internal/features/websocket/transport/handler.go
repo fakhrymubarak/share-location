@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
-	authservice "github.com/fakhry/share-location/backend/internal/features/auth/service"
+	"github.com/fakhry/share-location/backend/internal/auth"
 	convservice "github.com/fakhry/share-location/backend/internal/features/conversations/service"
 	locservice "github.com/fakhry/share-location/backend/internal/features/location/service"
 	msgservice "github.com/fakhry/share-location/backend/internal/features/messaging/service"
@@ -20,7 +20,7 @@ import (
 )
 
 type HandlerDeps struct {
-	Users         *authservice.UserService
+	Users         *auth.UserService
 	Conversations *convservice.ConversationService
 	Messaging     *msgservice.MessagingService
 	LiveLocation  *locservice.LiveLocationService

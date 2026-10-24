@@ -12,16 +12,13 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 
+	"github.com/fakhry/share-location/backend/internal/auth"
 	ws "github.com/fakhry/share-location/backend/internal/features/websocket"
 	"github.com/fakhry/share-location/backend/internal/features/websocket/registry"
 	pubredis "github.com/fakhry/share-location/backend/internal/pubsub/redis"
 	"github.com/fakhry/share-location/backend/internal/shared/config"
 	"github.com/fakhry/share-location/backend/internal/shared/logging"
 	"github.com/fakhry/share-location/backend/internal/transport/httpserver"
-
-	authdomain "github.com/fakhry/share-location/backend/internal/features/auth/domain"
-	authrepo "github.com/fakhry/share-location/backend/internal/features/auth/repository"
-	authservice "github.com/fakhry/share-location/backend/internal/features/auth/service"
 
 	convdomain "github.com/fakhry/share-location/backend/internal/features/conversations/domain"
 	convrepo "github.com/fakhry/share-location/backend/internal/features/conversations/repository"
@@ -100,7 +97,7 @@ func buildApp(cfg *config.Config, logger *logging.Logger) (*fiber.App, int) {
 	pgPool := postgresPool(cfg, logger)
 	redisCli := redisClient(cfg.Redis.URL, logger)
 
-	var usersRepo authdomain.UserRepository = authrepo.NewMemoryUserRepository(nil)
+	var usersRepo auth.UserRepository = auth.NewMemoryUserRepository(nil)
 	var convsRepo convdomain.ConversationRepository = convrepo.NewMemoryConversationRepository(nil)
 	var membersRepo convdomain.MembershipRepository = convrepo.NewMemoryMembershipRepository(nil)
 
@@ -119,7 +116,7 @@ func buildApp(cfg *config.Config, logger *logging.Logger) (*fiber.App, int) {
 	useRedisFanout := false
 
 	if pgPool != nil {
-		usersRepo = authrepo.NewPgUserRepository(pgPool)
+		usersRepo = auth.NewPgUserRepository(pgPool)
 		convsRepo = convrepo.NewPgConversationRepository(pgPool, nil)
 		membersRepo = convrepo.NewPgMembershipRepository(pgPool, nil)
 
@@ -141,7 +138,7 @@ func buildApp(cfg *config.Config, logger *logging.Logger) (*fiber.App, int) {
 		useRedisFanout = true
 	}
 
-	userSvc := authservice.NewUserService(usersRepo)
+	userSvc := auth.NewUserService(usersRepo)
 	convSvc := convservice.NewConversationService(usersRepo, convsRepo, membersRepo, nil)
 	msgSvc := msgservice.NewMessagingService(msgRepo, membersRepo, msgPublisher, rcRepo, nil)
 	liveSvc := locservice.NewLiveLocationService(liveRepo, membersRepo, livePublisher, seconds(cfg.LiveLocation.MaxTTLSeconds), nil)

@@ -11,16 +11,16 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/fakhry/share-location/backend/internal/features/conversations/domain"
-	"github.com/fakhry/share-location/backend/internal/repo/pg"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // PgMembershipRepository implements repo.MembershipRepository using Postgres.
 type PgMembershipRepository struct {
-	DB  pg.PgxPool
+	DB  *pgxpool.Pool
 	now func() time.Time
 }
 
-func NewPgMembershipRepository(db pg.PgxPool, now func() time.Time) *PgMembershipRepository {
+func NewPgMembershipRepository(db *pgxpool.Pool, now func() time.Time) *PgMembershipRepository {
 	return &PgMembershipRepository{DB: db, now: now}
 }
 

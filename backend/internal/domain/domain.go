@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
-	authdomain "github.com/fakhry/share-location/backend/internal/features/auth/domain"
+	"github.com/fakhry/share-location/backend/internal/auth"
 	convdomain "github.com/fakhry/share-location/backend/internal/features/conversations/domain"
 	locdomain "github.com/fakhry/share-location/backend/internal/features/location/domain"
 	shareddomain "github.com/fakhry/share-location/backend/internal/shared/domain"
@@ -19,7 +19,7 @@ var (
 )
 
 // User represents an authenticated person identified by username.
-type User = authdomain.User
+type User = auth.User
 
 type ConversationType = convdomain.ConversationType
 

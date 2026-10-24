@@ -10,8 +10,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/sirupsen/logrus"
 
-	authservice "github.com/fakhry/share-location/backend/internal/features/auth/service"
-	authtransport "github.com/fakhry/share-location/backend/internal/features/auth/transport"
+	"github.com/fakhry/share-location/backend/internal/auth"
 	convservice "github.com/fakhry/share-location/backend/internal/features/conversations/service"
 	convtransport "github.com/fakhry/share-location/backend/internal/features/conversations/transport"
 	locservice "github.com/fakhry/share-location/backend/internal/features/location/service"
@@ -27,7 +26,7 @@ import (
 
 // Deps aggregates services used by the HTTP/WebSocket layer.
 type Deps struct {
-	Users         *authservice.UserService
+	Users         *auth.UserService
 	Conversations *convservice.ConversationService
 	Messaging     *msgservice.MessagingService
 	LiveLocation  *locservice.LiveLocationService
@@ -97,7 +96,12 @@ func New(deps Deps) *fiber.App {
 	})
 
 	app.Get("/health", func(c *fiber.Ctx) error { return c.SendStatus(http.StatusOK) })
-	app.Post("/v1/login", authtransport.NewLoginHandler(deps.Users))
+
+	// Auth routes
+	authHandler := auth.NewHandler(deps.Users)
+	app.Post("/v1/register", authHandler.Register)
+	app.Post("/v1/login", authHandler.Login)
+
 	app.Post("/v1/conversations", convtransport.NewCreateConversationHandler(deps.Conversations))
 	app.Get("/v1/conversations", convtransport.NewListConversationsHandler(deps.Conversations))
 	app.Get("/v1/conversations/:id/messages", msgtransport.NewListMessagesHandler(deps.Messaging))

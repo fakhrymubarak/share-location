@@ -10,17 +10,17 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/fakhry/share-location/backend/internal/features/conversations/domain"
-	"github.com/fakhry/share-location/backend/internal/repo/pg"
 	shareddomain "github.com/fakhry/share-location/backend/internal/shared/domain"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // PgConversationRepository implements repo.ConversationRepository using Postgres.
 type PgConversationRepository struct {
-	DB  pg.PgxPool
+	DB  *pgxpool.Pool
 	now func() time.Time
 }
 
-func NewPgConversationRepository(db pg.PgxPool, now func() time.Time) *PgConversationRepository {
+func NewPgConversationRepository(db *pgxpool.Pool, now func() time.Time) *PgConversationRepository {
 	return &PgConversationRepository{DB: db, now: now}
 }
 

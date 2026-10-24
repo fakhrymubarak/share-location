@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
-	authrepo "github.com/fakhry/share-location/backend/internal/features/auth/repository"
+	"github.com/fakhry/share-location/backend/internal/auth"
 	convdomain "github.com/fakhry/share-location/backend/internal/features/conversations/domain"
 	convrepo "github.com/fakhry/share-location/backend/internal/features/conversations/repository"
 	shareddomain "github.com/fakhry/share-location/backend/internal/shared/domain"
@@ -16,7 +16,7 @@ import (
 
 func TestCreateDirectConversation_NewAndIdempotent(t *testing.T) {
 	now := time.Date(2026, 1, 2, 10, 0, 0, 0, time.UTC)
-	users := authrepo.NewMemoryUserRepository(func() time.Time { return now })
+	users := auth.NewMemoryUserRepository(func() time.Time { return now })
 	convs := convrepo.NewMemoryConversationRepository(func() time.Time { return now })
 	members := convrepo.NewMemoryMembershipRepository(func() time.Time { return now })
 	svc := NewConversationService(users, convs, members, func() time.Time { return now })
@@ -68,7 +68,7 @@ func TestCreateDirectConversation_NewAndIdempotent(t *testing.T) {
 
 func TestCreateGroupConversation(t *testing.T) {
 	now := time.Date(2026, 1, 2, 11, 0, 0, 0, time.UTC)
-	users := authrepo.NewMemoryUserRepository(func() time.Time { return now })
+	users := auth.NewMemoryUserRepository(func() time.Time { return now })
 	convs := convrepo.NewMemoryConversationRepository(func() time.Time { return now })
 	members := convrepo.NewMemoryMembershipRepository(func() time.Time { return now })
 	svc := NewConversationService(users, convs, members, func() time.Time { return now })
@@ -95,7 +95,7 @@ func TestCreateGroupConversation(t *testing.T) {
 
 func TestListConversations(t *testing.T) {
 	now := time.Date(2026, 1, 3, 12, 0, 0, 0, time.UTC)
-	users := authrepo.NewMemoryUserRepository(func() time.Time { return now })
+	users := auth.NewMemoryUserRepository(func() time.Time { return now })
 	convs := convrepo.NewMemoryConversationRepository(func() time.Time { return now })
 	members := convrepo.NewMemoryMembershipRepository(func() time.Time { return now })
 	svc := NewConversationService(users, convs, members, func() time.Time { return now })
@@ -137,7 +137,7 @@ func TestListConversations(t *testing.T) {
 }
 
 func TestCreateDirectConversation_RequiresTwoUniqueParticipants(t *testing.T) {
-	users := authrepo.NewMemoryUserRepository(time.Now)
+	users := auth.NewMemoryUserRepository(time.Now)
 	convs := convrepo.NewMemoryConversationRepository(time.Now)
 	members := convrepo.NewMemoryMembershipRepository(time.Now)
 	svc := NewConversationService(users, convs, members, time.Now)
@@ -152,7 +152,7 @@ func TestCreateDirectConversation_RequiresTwoUniqueParticipants(t *testing.T) {
 }
 
 func TestListMembersValidation(t *testing.T) {
-	svc := NewConversationService(authrepo.NewMemoryUserRepository(nil), convrepo.NewMemoryConversationRepository(nil), convrepo.NewMemoryMembershipRepository(nil), nil)
+	svc := NewConversationService(auth.NewMemoryUserRepository(nil), convrepo.NewMemoryConversationRepository(nil), convrepo.NewMemoryMembershipRepository(nil), nil)
 	if _, err := svc.ListMembers(context.Background(), uuid.Nil); !errors.Is(err, shareddomain.ErrInvalidInput) {
 		t.Fatalf("expected invalid input error, got %v", err)
 	}

@@ -10,8 +10,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/fakhry/share-location/backend/internal/auth"
 	"github.com/fakhry/share-location/backend/internal/domain"
-	authrepo "github.com/fakhry/share-location/backend/internal/features/auth/repository"
 	convrepo "github.com/fakhry/share-location/backend/internal/features/conversations/repository"
 	convservice "github.com/fakhry/share-location/backend/internal/features/conversations/service"
 	"github.com/fakhry/share-location/backend/internal/shared/logging"
@@ -37,7 +37,7 @@ func TestStartRedisFanoutBroadcastsChat(t *testing.T) {
 
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	hub := &stubHub{payloads: make(chan []byte, 1)}
-	convSvc := convservice.NewConversationService(authrepo.NewMemoryUserRepository(nil), convrepo.NewMemoryConversationRepository(nil), convrepo.NewMemoryMembershipRepository(nil), nil)
+	convSvc := convservice.NewConversationService(auth.NewMemoryUserRepository(nil), convrepo.NewMemoryConversationRepository(nil), convrepo.NewMemoryMembershipRepository(nil), nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -75,7 +75,7 @@ func TestStartRedisFanoutBroadcastsLive(t *testing.T) {
 
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	hub := &stubHub{payloads: make(chan []byte, 1)}
-	convSvc := convservice.NewConversationService(authrepo.NewMemoryUserRepository(nil), convrepo.NewMemoryConversationRepository(nil), convrepo.NewMemoryMembershipRepository(nil), nil)
+	convSvc := convservice.NewConversationService(auth.NewMemoryUserRepository(nil), convrepo.NewMemoryConversationRepository(nil), convrepo.NewMemoryMembershipRepository(nil), nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

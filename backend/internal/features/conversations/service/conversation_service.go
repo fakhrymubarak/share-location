@@ -8,19 +8,19 @@ import (
 
 	"github.com/google/uuid"
 
-	authdomain "github.com/fakhry/share-location/backend/internal/features/auth/domain"
+	"github.com/fakhry/share-location/backend/internal/auth"
 	convdomain "github.com/fakhry/share-location/backend/internal/features/conversations/domain"
 	shareddomain "github.com/fakhry/share-location/backend/internal/shared/domain"
 )
 
 type ConversationService struct {
-	Users         authdomain.UserRepository
+	Users         auth.UserRepository
 	Conversations convdomain.ConversationRepository
 	Memberships   convdomain.MembershipRepository
 	now           func() time.Time
 }
 
-func NewConversationService(users authdomain.UserRepository, convs convdomain.ConversationRepository, members convdomain.MembershipRepository, now func() time.Time) *ConversationService {
+func NewConversationService(users auth.UserRepository, convs convdomain.ConversationRepository, members convdomain.MembershipRepository, now func() time.Time) *ConversationService {
 	if now == nil {
 		now = time.Now
 	}
@@ -45,9 +45,9 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 
 	uniqueUsernames := dedupeStrings(req.ParticipantUsernames)
 
-	users := make([]authdomain.User, 0, len(uniqueUsernames))
+	users := make([]auth.User, 0, len(uniqueUsernames))
 	for _, username := range uniqueUsernames {
-		user, err := s.Users.UpsertByUsername(ctx, username, username)
+		user, err := s.Users.UpsertByUsername(ctx, username, "", username)
 		if err != nil {
 			return convdomain.Conversation{}, nil, err
 		}
@@ -155,7 +155,7 @@ func buildDirectPairKey(a, b uuid.UUID) string {
 	return strings.Join(ids, ":")
 }
 
-func toParticipants(users []authdomain.User) []convdomain.Participant {
+func toParticipants(users []auth.User) []convdomain.Participant {
 	parts := make([]convdomain.Participant, 0, len(users))
 	for _, u := range users {
 		parts = append(parts, convdomain.Participant{
